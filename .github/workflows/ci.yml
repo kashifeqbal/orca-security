@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint (bash -n)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check bash syntax on all .sh files
+        run: |
+          fail=0
+          for dir in lib scripts modules; do
+            if [ -d "$dir" ]; then
+              while IFS= read -r -d '' f; do
+                echo "Checking: $f"
+                if ! bash -n "$f"; then
+                  echo "FAIL: $f"
+                  fail=1
+                fi
+              done < <(find "$dir" -name "*.sh" -print0)
+            fi
+          done
+          exit $fail
+
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Run shellcheck (errors fail, warnings OK)
+        run: |
+          fail=0
+          for dir in lib scripts modules; do
+            if [ -d "$dir" ]; then
+              while IFS= read -r -d '' f; do
+                echo "Checking: $f"
+                # SC1091: ignore not following sourced files
+                # --severity=error: only fail on errors, not warnings
+                if ! shellcheck --severity=error -e SC1091 "$f"; then
+                  fail=1
+                fi
+              done < <(find "$dir" -name "*.sh" -print0)
+            fi
+          done
+          exit $fail
+
+  test:
+    name: Tests (bats-core)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install bats-core
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y bats
+
+      - name: Run bats tests
+        run: |
+          if [ -d tests ] && compgen -G "tests/*.bats" > /dev/null 2>&1; then
+            echo "Running bats tests..."
+            bats tests/*.bats
+          else
+            echo "No .bats test files found in tests/ — skipping."
+          fi
