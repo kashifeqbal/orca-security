@@ -1,0 +1,126 @@
+# =============================================================================
+# ORCA Configuration
+# =============================================================================
+# Copy to orca.conf and customize for your machine.
+# All values have sane defaults — only set what you need to change.
+# =============================================================================
+
+# ── General ──────────────────────────────────────────────────────────────────
+# ORCA_DIR="/var/lib/orca"            # State directory (threat-db, logs, etc.)
+# ORCA_LOG="/var/log/orca/orca.log"   # Main log file
+
+# ── SSH Hardening ────────────────────────────────────────────────────────────
+SSH_PORT=2222                          # Real SSH port (moved from 22)
+SSH_ALLOW_USERS="root"                 # Allowed SSH users (space-separated)
+# SSH_PUBKEY=""                        # Public key to install (or paste in authorized_keys)
+# SSH_DISABLE_PASSWORD=true            # Disable password auth (default: true)
+
+# ── Cowrie Honeypot ──────────────────────────────────────────────────────────
+COWRIE_ENABLE=true                     # Install and configure Cowrie on port 22
+COWRIE_USER="cowrie"                   # System user for Cowrie
+COWRIE_DIR="/home/cowrie/cowrie"       # Cowrie installation path
+
+# ── Firewall (UFW) ──────────────────────────────────────────────────────────
+UFW_ENABLE=true
+UFW_EXTRA_ALLOW=""                     # Extra ports to allow (e.g., "80/tcp 443/tcp")
+UFW_RATE_LIMIT_PORTS=""                # Ports to rate-limit (e.g., "22000/tcp")
+
+# ── Fail2ban ─────────────────────────────────────────────────────────────────
+F2B_ENABLE=true
+F2B_BANTIME=-1                         # Ban time (-1 = permanent)
+F2B_MAXRETRY=3                         # Max retries before ban
+F2B_FINDTIME=600                       # Window for counting retries (seconds)
+
+# ── Scoring & Ban Policy ─────────────────────────────────────────────────────
+# Score thresholds for auto-ban escalation
+BAN_THRESHOLD_SHORT=25                 # Score >= this → 24h ban
+BAN_THRESHOLD_LONG=75                  # Score >= this → 7d ban
+BAN_THRESHOLD_PERMANENT=150            # Score >= this → permanent ban
+HONEYPOT_LOGIN_INSTANT_BAN=true        # Instant ban on any honeypot login success
+
+# Severity thresholds (rolling 30m score)
+SEVERITY_LOW=0
+SEVERITY_ELEVATED=100
+SEVERITY_HIGH=300
+SEVERITY_CRITICAL=600
+CRITICAL_REQUIRES_HARD_SIGNAL=true     # CRITICAL only with malware/persistence/tunnel/mass-cmd
+
+# Recon tuning
+RECON_SCORE=3                          # Points per recon event
+RECON_CAP_30M=30                       # Max recon points per IP per 30m
+
+# ── Kernel Hardening ─────────────────────────────────────────────────────────
+KERNEL_HARDEN=true
+DISABLE_IPV6=false                     # Set true if you don't use IPv6
+# See modules/kernel/sysctl.conf for full list
+
+# ── Canary Tokens ────────────────────────────────────────────────────────────
+CANARY_ENABLE=true
+CANARY_PATHS=(                         # Tripwire locations
+    "/root/.ssh/id_rsa_canary"
+    "/etc/shadow.bak"
+    "/root/.bitcoin/wallet.dat"
+    "/var/www/.env"
+)
+
+# ── Alerts ───────────────────────────────────────────────────────────────────
+# At least one alert channel recommended
+
+# Telegram
+ALERT_TELEGRAM_TOKEN=""                # Bot token from @BotFather
+ALERT_TELEGRAM_CHAT=""                 # Chat/group ID
+
+# Discord
+ALERT_DISCORD_WEBHOOK=""               # Discord webhook URL
+
+# Slack
+ALERT_SLACK_WEBHOOK=""                 # Slack incoming webhook URL
+
+# Generic webhook (POST JSON)
+ALERT_WEBHOOK_URL=""                   # Any HTTP endpoint
+ALERT_WEBHOOK_HEADERS=""               # Extra headers (e.g., "Authorization: Bearer xxx")
+
+# Rate limiting
+ALERT_RATE_LIMIT=300                   # Min seconds between similar alerts
+ALERT_BATCH_INTERVAL=3600              # Batch non-critical alerts (seconds)
+
+# ── Threat Feed Import ───────────────────────────────────────────────────────
+THREAT_FEEDS=(
+    # "https://lists.blocklist.de/lists/ssh.txt"
+    # "https://raw.githubusercontent.com/stamparm/ipsum/master/levels/3.txt"
+    # "https://feodotracker.abuse.ch/downloads/ipblocklist.txt"
+)
+THREAT_FEED_REFRESH=86400              # Seconds between feed refreshes (default: 24h)
+
+# ── Threat Feed Export ───────────────────────────────────────────────────────
+EXPORT_ENABLE=false
+EXPORT_FORMAT="json"                   # json, plaintext, both
+EXPORT_PATH="/var/lib/orca/export"     # Local export directory
+EXPORT_GITHUB_REPO=""                  # e.g., "kashifeqbal/orca-threats"
+EXPORT_GITHUB_BRANCH="main"
+EXPORT_MIN_SCORE=25                    # Only export IPs above this score
+
+# ── Cross-Node Sync ──────────────────────────────────────────────────────────
+SYNC_ENABLE=false
+SYNC_METHOD="git"                      # git or api
+SYNC_REPO=""                           # Git repo URL for threat DB sync
+SYNC_BRANCH="main"
+SYNC_INTERVAL=900                      # Seconds between sync (default: 15m)
+SYNC_NODE_ID=""                        # Unique ID for this node (auto-generated if empty)
+# SYNC_API_URL=""                      # API endpoint for centralized sync
+# SYNC_API_KEY=""                      # API auth key
+
+# ── Monitoring Schedule ──────────────────────────────────────────────────────
+CRON_NOTIFY_INTERVAL="*/15 * * * *"    # Cowrie event processing
+CRON_AUTOBAN_INTERVAL="*/15 * * * *"   # Ban enforcement check
+CRON_POSTURE_INTERVAL="*/30 * * * *"   # Security posture report
+CRON_HEALTHCHECK_INTERVAL="*/30 * * * *"  # Service health check
+CRON_WEEKLY_REPORT="0 9 * * 1"        # Weekly summary (Monday 9am)
+CRON_FEED_IMPORT="0 */6 * * *"        # Threat feed import (every 6h)
+CRON_EXPORT="0 */6 * * *"             # Threat feed export (every 6h)
+CRON_SYNC="*/15 * * * *"              # Cross-node sync
+
+# ── OpenClaw Integration (optional) ─────────────────────────────────────────
+OPENCLAW_ENABLE=false
+OPENCLAW_AGENT_ID="ops"
+OPENCLAW_RPC_SOCKET=""                 # Path to OpenClaw RPC socket
