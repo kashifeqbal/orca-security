@@ -2,16 +2,16 @@
 # WatchClaw Self-Healing Health Check
 # Runs every 30min. Checks services, restarts failures, alerts on issues.
 
-ENV_FILE="/root/.openclaw/.env"
+ENV_FILE="${WATCHCLAW_CONF:-/etc/watchclaw/watchclaw.conf}"
 [ -f "$ENV_FILE" ] && set -a && source "$ENV_FILE" && set +a
 
 BOT="${OPS_ALERTS_BOT_TOKEN:-}"
 CHAT_ID="${ALERTS_TELEGRAM_CHAT:-}"
-LOG="/root/.openclaw/workspace/agents/ops/logs/service-health.log"
-CRON_SOURCE="/root/.openclaw/workspace/config/cron-jobs-source.json"
-CRON_BACKUP="/root/.openclaw/workspace/config/cron-jobs-backup.json"
-CRON_LIVE="/root/.openclaw/cron/jobs.json"
-CRON_AUDIT="/root/.openclaw/workspace/scripts/cron-channel-audit.sh"
+LOG="/var/log/watchclaw/service-health.log"
+CRON_SOURCE="/etc/watchclaw/cron-jobs.json"
+CRON_BACKUP="/var/lib/watchclaw/cron-backup.json"
+CRON_LIVE="/var/lib/watchclaw/cron-live.json"
+CRON_AUDIT="/opt/watchclaw/scripts/cron-audit.sh"
 WATCHCLAW_STATE="/root/.watchclaw/watchclaw-state.json"
 
 mkdir -p "$(dirname "$LOG")"
@@ -35,15 +35,15 @@ if [ -x "$PREFLIGHT_SCRIPT" ]; then
   if echo "$PREFLIGHT_OUT" | grep -q '"status":"failed"'; then
     ISSUES+=("WatchClaw preflight failed (script parser warnings/errors)")
     log "ISSUE: preflight failed payload=${PREFLIGHT_OUT}"
-    MSG="🚨 *Ops Alert — $(date '+%Y-%m-%d %H:%M')*\n\n❌ WatchClaw preflight failed (script parser warnings/errors).\nCheck: /root/.openclaw/workspace/agents/ops/scripts/watchclaw-preflight.sh"
+    MSG="🚨 *Ops Alert — $(date '+%Y-%m-%d %H:%M')*\n\n❌ WatchClaw preflight failed (script parser warnings/errors).\nCheck: /opt/watchclaw/scripts/watchclaw-preflight.sh"
     alert "$MSG"
     exit 0
   fi
 fi
 
 # ── 1. Check .env has all required keys ──────────────────────────────────────
-ENV_FILE="/root/.openclaw/.env"
-REQUIRED_KEYS="OPENAI_API_KEY GEMINI_API_KEY TAVILY_API_KEY SKILL_GOPLACES_KEY"
+ENV_FILE="${WATCHCLAW_CONF:-/etc/watchclaw/watchclaw.conf}"
+REQUIRED_KEYS="${WATCHCLAW_REQUIRED_KEYS:-ALERT_TELEGRAM_TOKEN}"
 ENV_BROKEN=false
 for key in $REQUIRED_KEYS; do
   val=$(grep "^${key}=" "$ENV_FILE" 2>/dev/null | cut -d= -f2-)
@@ -60,12 +60,12 @@ if [ "$ENV_BROKEN" = true ]; then
 fi
 
 # ── 2. Check crons — restore if count drops unexpectedly ────────────────────
-CRON_COUNT=$(openclaw cron list --all 2>/dev/null | grep -c "idle\|ok\|error\|running") || CRON_COUNT=0
+CRON_COUNT=$(watchclaw status 2>/dev/null | grep -c "idle\|ok\|error\|running") || CRON_COUNT=0
 if [ "$CRON_COUNT" -lt 9 ]; then
   log "WARN: Only $CRON_COUNT crons found (expected >=9) — restoring"
-  if [ -x "/root/.openclaw/workspace/scripts/restore-crons.sh" ]; then
-    /root/.openclaw/workspace/scripts/restore-crons.sh >> "$LOG" 2>&1
-    NEW_COUNT=$(openclaw cron list --all 2>/dev/null | grep -c "idle\|ok\|error\|running") || NEW_COUNT=0
+  if [ -x "/opt/watchclaw/scripts/restore-crons.sh" ]; then
+    /opt/watchclaw/scripts/restore-crons.sh >> "$LOG" 2>&1
+    NEW_COUNT=$(watchclaw status 2>/dev/null | grep -c "idle\|ok\|error\|running") || NEW_COUNT=0
     if [ "$NEW_COUNT" -ge 9 ]; then
       FIXED+=("Crons restored via restore-crons.sh ($CRON_COUNT → $NEW_COUNT)")
     else

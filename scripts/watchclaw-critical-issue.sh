@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-ENV_FILE="/root/.openclaw/.env"
+ENV_FILE="${WATCHCLAW_CONF:-/etc/watchclaw/watchclaw.conf}"
 [ -f "$ENV_FILE" ] && set -a && source "$ENV_FILE" && set +a
 
 # Source WatchClaw library
@@ -26,7 +26,7 @@ done
 
 GITHUB_REPO="${ORCA_GITHUB_REPO:-tap-health/infrastructure-security}"
 ISSUE_RATE_HRS="${ORCA_ISSUE_RATE_HRS:-6}"
-LOG_DIR="/root/.openclaw/workspace/agents/ops/logs"
+LOG_DIR="/var/log/watchclaw"
 mkdir -p "$LOG_DIR"
 LOG="${LOG_DIR}/watchclaw-weekly.log"
 

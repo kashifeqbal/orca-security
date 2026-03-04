@@ -5,13 +5,13 @@
 
 set -euo pipefail
 
-ENV_FILE="/root/.openclaw/.env"
+ENV_FILE="${WATCHCLAW_CONF:-/etc/watchclaw/watchclaw.conf}"
 [ -f "$ENV_FILE" ] && set -a && source "$ENV_FILE" && set +a
 
 BOT="${OPS_ALERTS_BOT_TOKEN:-}"
 CHAT_ID="${ALERTS_TELEGRAM_CHAT:-}"
-STATE_FILE="/root/.openclaw/workspace/agents/ops/logs/watchclaw-preflight-state.json"
-SCRIPTS_DIR="/root/.openclaw/workspace/agents/ops/scripts"
+STATE_FILE="/var/log/watchclaw/watchclaw-preflight-state.json"
+SCRIPTS_DIR="/opt/watchclaw/scripts"
 
 mkdir -p "$(dirname "$STATE_FILE")"
 [ -f "$STATE_FILE" ] || echo '{"last_alert_ts":0,"last_signature":""}' > "$STATE_FILE"
@@ -37,7 +37,7 @@ while IFS= read -r f; do
 done < <(find "$SCRIPTS_DIR" -type f -name "*.sh" | sort)
 
 # Runtime smoke test: ensure WatchClaw init works even if HOME is unset
-RUNTIME_OUT=$(env -u HOME bash -lc 'source /root/.openclaw/workspace/agents/ops/scripts/lib/watchclaw-lib.sh && watchclaw_init && echo ok' 2>&1 || true)
+RUNTIME_OUT=$(env -u HOME bash -lc 'source /opt/watchclaw/lib/watchclaw-lib.sh && watchclaw_init && echo ok' 2>&1 || true)
 if ! echo "$RUNTIME_OUT" | grep -q '^ok$'; then
   warnings+="runtime: env -u HOME watchclaw_init failed: ${RUNTIME_OUT}"$'\n'
 fi

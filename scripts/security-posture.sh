@@ -18,13 +18,13 @@
 set -euo pipefail
 
 # ── Load environment ──────────────────────────────────────────────────────────
-ENV_FILE="/root/.openclaw/.env"
+ENV_FILE="${WATCHCLAW_CONF:-/etc/watchclaw/watchclaw.conf}"
 [ -f "$ENV_FILE" ] && set -a && source "$ENV_FILE" && set +a
 
 # ── Config ────────────────────────────────────────────────────────────────────
 BOT="${OPS_ALERTS_BOT_TOKEN:-}"
 CHAT_ID="${ALERTS_TELEGRAM_CHAT:-}"
-LOG_DIR="/root/.openclaw/workspace/agents/ops/logs"
+LOG_DIR="/var/log/watchclaw"
 POSTURE_LOG="${LOG_DIR}/security-posture.log"
 HEALTH_LOG="${LOG_DIR}/service-health.log"
 

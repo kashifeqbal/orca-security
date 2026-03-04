@@ -177,8 +177,8 @@ Risk Meaning: Normal background noise
 Action Right Now: No action needed
 
 Active Threat Score (last 30m): 23.0
-Top Offender (last 30m): 64.227.183.210 (18.0 in 30m)
-Highest Lifetime Offender: 167.99.46.101 (1388.0 lifetime)
+Top Offender (last 30m): 203.0.113.42 (18.0 in 30m)
+Highest Lifetime Offender: 198.51.100.17 (1388.0 lifetime)
 Repeat Offenders: none
 
 Simple Summary:

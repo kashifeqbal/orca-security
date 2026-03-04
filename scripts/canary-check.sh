@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-ENV_FILE="/root/.openclaw/.env"
+ENV_FILE="${WATCHCLAW_CONF:-/etc/watchclaw/watchclaw.conf}"
 [ -f "$ENV_FILE" ] && set -a && source "$ENV_FILE" && set +a
 
 CANARY_STATE="/var/lib/watchclaw/canary/checksums"

@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-ENV_FILE="/root/.openclaw/.env"
+ENV_FILE="${WATCHCLAW_CONF:-/etc/watchclaw/watchclaw.conf}"
 [ -f "$ENV_FILE" ] && set -a && source "$ENV_FILE" && set +a
 
 # Source WatchClaw library
@@ -20,8 +20,8 @@ source "${LIB_DIR}/watchclaw-lib.sh"
 
 watchclaw_init
 
-OBSIDIAN_DIR="/root/workspace/ObsidianVault/Areas/Security"
-LOG_DIR="/root/.openclaw/workspace/agents/ops/logs"
+OBSIDIAN_DIR="/var/log/watchclaw/reports"
+LOG_DIR="/var/log/watchclaw"
 
 mkdir -p "$OBSIDIAN_DIR" "$LOG_DIR"
 

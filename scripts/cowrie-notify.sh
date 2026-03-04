@@ -1,26 +1,36 @@
 #!/bin/bash
+# WatchClaw — https://github.com/kashifeqbal/watchclaw
 # =============================================================================
-# cowrie-notify.sh — Cowrie Honeypot Telegram Notifier + Argus Threat Feeder
+# cowrie-notify.sh — Cowrie Honeypot Telegram Notifier + WatchClaw Threat Feeder
 # =============================================================================
-# Reads new cowrie JSON log entries, feeds events into the Argus threat DB
+# Reads new cowrie JSON log entries, feeds events into the WatchClaw threat DB
 # for stateful scoring, then sends a Telegram summary for notable activity.
 #
 # Original behaviour preserved: alerts on login success, commands, malware.
-# New: every event is recorded in ~/.argus/threat-db.json with scoring.
+# New: every event is recorded in ~/.watchclaw/threat-db.json with scoring.
 # =============================================================================
 
-ENV_FILE="/root/.openclaw/.env"
-[ -f "$ENV_FILE" ] && set -a && source "$ENV_FILE" && set +a
+# Load WatchClaw config
+WATCHCLAW_CONF="${WATCHCLAW_CONF:-/etc/watchclaw/watchclaw.conf}"
+# shellcheck source=/etc/watchclaw/watchclaw.conf
+[ -f "$WATCHCLAW_CONF" ] && source "$WATCHCLAW_CONF"
 
-BOT_TOKEN="${OPS_ALERTS_BOT_TOKEN:-}"
-CHAT_ID="${ALERTS_TELEGRAM_CHAT:-}"
+# Telegram credentials (accept WATCHCLAW_ prefix or ALERT_ prefix from config)
+WATCHCLAW_TELEGRAM_TOKEN="${WATCHCLAW_TELEGRAM_TOKEN:-${ALERT_TELEGRAM_TOKEN:-}}"
+WATCHCLAW_ALERT_CHAT_ID="${WATCHCLAW_ALERT_CHAT_ID:-${ALERT_TELEGRAM_CHAT:-}}"
+# Bridge for watchclaw-lib.sh (uses OPS_ALERTS_BOT_TOKEN / ALERTS_TELEGRAM_CHAT)
+OPS_ALERTS_BOT_TOKEN="${WATCHCLAW_TELEGRAM_TOKEN:-}"
+ALERTS_TELEGRAM_CHAT="${WATCHCLAW_ALERT_CHAT_ID:-}"
+
+BOT_TOKEN="${WATCHCLAW_TELEGRAM_TOKEN:-}"
+CHAT_ID="${WATCHCLAW_ALERT_CHAT_ID:-}"
 LOGFILE="/home/cowrie/cowrie/var/log/cowrie/cowrie.json"
-STATEFILE="/root/.openclaw/workspace/agents/ops/logs/cowrie-lastpos"
+STATEFILE="/var/lib/watchclaw/cowrie-lastpos"
 
-# Source WatchClaw library (threat-db.sh is now a compat shim → watchclaw-lib.sh)
-LIB_DIR="$(dirname "$0")/lib"
-# shellcheck source=scripts/lib/threat-db.sh
-source "${LIB_DIR}/threat-db.sh"
+# Source WatchClaw library
+LIB_DIR="$(cd "$(dirname "$0")/.." && pwd)/lib"
+# shellcheck source=lib/watchclaw-lib.sh
+source "${LIB_DIR}/watchclaw-lib.sh"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 send_telegram() {
@@ -49,7 +59,7 @@ NEW_LINES=$(tail -c +"$((LASTPOS + 1))" "$LOGFILE" 2>/dev/null)
 echo "$FILESIZE" > "$STATEFILE"
 
 # ── Parse events, score each IP, build Telegram message ───────────────────────
-argus_init
+watchclaw_init
 
 # We'll accumulate alert lines and also feed threat DB in one Python pass,
 # then post-process with shell for scoring/bans.
@@ -57,7 +67,6 @@ _PYSC=$(mktemp /tmp/cowrie-parse-XXXXXX.py)
 cat > "$_PYSC" <<'PYEOF'
 import sys, json
 
-events        = []
 scored_events = []  # list of (ip, event_type, extra_info, display_str)
 
 for line in sys.stdin:
@@ -132,7 +141,7 @@ PYEOF
 PARSE_OUTPUT=$(echo "$NEW_LINES" | python3 "$_PYSC")
 rm -f "$_PYSC"
 
-# ── Feed each event into Argus threat DB and check for bans ──────────────────
+# ── Feed each event into WatchClaw threat DB and check for bans ──────────────
 BAN_LINES=()
 FAILED_SUMMARY=""
 
@@ -141,9 +150,9 @@ while IFS='|' read -r record_type f1 f2 f3 f4; do
         SCORE_EVENT)
             ip="$f1"; event_type="$f2"; extra="$f3"
             # Record in threat DB (get new score back)
-            new_score=$(threat_record_event "$ip" "$event_type" "$extra" 2>/dev/null || echo 0)
+            new_score=$(watchclaw_record_event "$ip" "$event_type" "$extra" 2>/dev/null || echo 0)
             # Check and apply bans based on updated score
-            ban_applied=$(threat_check_and_ban "$ip" 2>/dev/null || echo "none")
+            ban_applied=$(watchclaw_check_and_ban "$ip" 2>/dev/null || echo "none")
             if [ "$ban_applied" != "none" ]; then
                 BAN_LINES+=("🚫 Auto-ban ($ban_applied): $ip (score: $new_score)")
             fi
@@ -157,7 +166,7 @@ done <<< "$PARSE_OUTPUT"
 
 # ── Update rolling baseline ──────────────────────────────────────────────────
 TOTAL_EVENTS=$(echo "$PARSE_OUTPUT" | grep -c '^SCORE_EVENT' || echo 0)
-threat_update_baseline "$TOTAL_EVENTS"
+orca_update_baseline "$TOTAL_EVENTS"
 
 # ── Safety net: direct scan for high-priority events ────────────────────────
 # Independent of PARSE_OUTPUT — guarantees login.success always alerts
@@ -229,7 +238,8 @@ import sys, json
 db_path = sys.argv[1]
 try:
     with open(db_path) as f: db = json.load(f)
-except: db = {}
+except Exception:
+    db = {}
 for ip, rec in db.items():
     et = rec.get('event_types', {})
     if et.get('login_success', 0) >= 5:
@@ -238,7 +248,7 @@ PYEOF
 )
 
 IPTABLES="/usr/sbin/iptables"
-COWRIE_BAN_LOG="/root/.openclaw/workspace/agents/ops/logs/cowrie-port22-bans.log"
+COWRIE_BAN_LOG="/var/log/watchclaw/cowrie-port22-bans.log"
 for ip in $COWRIE_BLOCKED; do
     # Check if already blocked on port 22 specifically
     if ! $IPTABLES -C INPUT -s "$ip" -p tcp --dport 22 -j DROP 2>/dev/null; then
@@ -247,7 +257,7 @@ for ip in $COWRIE_BLOCKED; do
     fi
 done
 
-# ── WatchClaw post-batch: cluster detection + geo anomaly checks ───────────────────
+# ── WatchClaw post-batch: cluster detection + geo anomaly checks ──────────────
 watchclaw_post_batch 2>/dev/null || true
 
 # ── Score decay (run periodically; cowrie-notify runs every 15m) ──────────────

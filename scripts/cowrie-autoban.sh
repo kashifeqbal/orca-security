@@ -1,33 +1,43 @@
 #!/bin/bash
+# WatchClaw — https://github.com/kashifeqbal/watchclaw
 # =============================================================================
-# cowrie-autoban.sh — Cowrie Connection-Count Auto-Ban + Argus Threat Feeder
+# cowrie-autoban.sh — Cowrie Connection-Count Auto-Ban + WatchClaw Threat Feeder
 # =============================================================================
 # Original behaviour: ban IPs with >= 20 connections today via UFW.
-# Added: feed counted connections into Argus threat DB for stateful scoring,
+# Added: feed counted connections into WatchClaw threat DB for stateful scoring,
 # and apply score-based escalation bans on top of raw connection bans.
 #
 # This script does NOT remove existing bans or replace service-healthcheck.
 # =============================================================================
 
-ENV_FILE="/root/.openclaw/.env"
-[ -f "$ENV_FILE" ] && set -a && source "$ENV_FILE" && set +a
+# Load WatchClaw config
+WATCHCLAW_CONF="${WATCHCLAW_CONF:-/etc/watchclaw/watchclaw.conf}"
+# shellcheck source=/etc/watchclaw/watchclaw.conf
+[ -f "$WATCHCLAW_CONF" ] && source "$WATCHCLAW_CONF"
+
+# Telegram credentials (accept WATCHCLAW_ prefix or ALERT_ prefix from config)
+WATCHCLAW_TELEGRAM_TOKEN="${WATCHCLAW_TELEGRAM_TOKEN:-${ALERT_TELEGRAM_TOKEN:-}}"
+WATCHCLAW_ALERT_CHAT_ID="${WATCHCLAW_ALERT_CHAT_ID:-${ALERT_TELEGRAM_CHAT:-}}"
+# Bridge for watchclaw-lib.sh (uses OPS_ALERTS_BOT_TOKEN / ALERTS_TELEGRAM_CHAT)
+OPS_ALERTS_BOT_TOKEN="${WATCHCLAW_TELEGRAM_TOKEN:-}"
+ALERTS_TELEGRAM_CHAT="${WATCHCLAW_ALERT_CHAT_ID:-}"
 
 LOGFILE="/home/cowrie/cowrie/var/log/cowrie/cowrie.json"
-BAN_LOG="/root/.openclaw/workspace/agents/ops/logs/cowrie-bans.log"
+BAN_LOG="/var/log/watchclaw/cowrie-bans.log"
 THRESHOLD=20
 UFW="/usr/sbin/ufw"
-TELEGRAM_BOT="${OPS_ALERTS_BOT_TOKEN:-}"
-TELEGRAM_CHAT="${ALERTS_TELEGRAM_CHAT:-}"
+TELEGRAM_BOT="${WATCHCLAW_TELEGRAM_TOKEN:-}"
+TELEGRAM_CHAT="${WATCHCLAW_ALERT_CHAT_ID:-}"
 
-# Source WatchClaw library (threat-db.sh is now a compat shim → watchclaw-lib.sh)
-LIB_DIR="$(dirname "$0")/lib"
-# shellcheck source=scripts/lib/threat-db.sh
-source "${LIB_DIR}/threat-db.sh"
+# Source WatchClaw library
+LIB_DIR="$(cd "$(dirname "$0")/.." && pwd)/lib"
+# shellcheck source=lib/watchclaw-lib.sh
+source "${LIB_DIR}/watchclaw-lib.sh"
 
 mkdir -p "$(dirname "$BAN_LOG")"
 
 BANNED_NEW=""
-argus_init
+watchclaw_init
 
 # ── Get IPs over connection threshold today ───────────────────────────────────
 FLAGGED=$(python3 - <<'PYEOF'
@@ -65,23 +75,23 @@ for ENTRY in $FLAGGED; do
     # Each connect beyond threshold counts as multiple failed_login events
     # We record a recon_fingerprint to represent the high-volume activity
     EXTRA="bulk_connections_${COUNT}"
-    threat_record_event "$IP" "recon_fingerprint" "$EXTRA" > /dev/null 2>&1 || true
+    watchclaw_record_event "$IP" "recon_fingerprint" "$EXTRA" > /dev/null 2>&1 || true
 
     # Also record individual failed_login for the connection count
     # (batched: record once per threshold unit to avoid inflating score)
     if [ "$COUNT" -ge "$((THRESHOLD * 5))" ]; then
         # Very high volume — record additional score events
-        threat_record_event "$IP" "recon_fingerprint" "high_volume" > /dev/null 2>&1 || true
+        watchclaw_record_event "$IP" "recon_fingerprint" "high_volume" > /dev/null 2>&1 || true
     fi
 
-    # Apply score-based ban via Argus (handles escalation, double-penalty)
-    BAN_TYPE=$(threat_check_and_ban "$IP" 2>/dev/null || echo "none")
+    # Apply score-based ban via WatchClaw (handles escalation, double-penalty)
+    BAN_TYPE=$(watchclaw_check_and_ban "$IP" 2>/dev/null || echo "none")
 
     # Legacy: also apply raw UFW ban if not already present (original behaviour)
     if ! $UFW status | grep -q "$IP"; then
         $UFW deny from "$IP" to any comment "cowrie-autoban" 2>/dev/null || true
         TS=$(date '+%Y-%m-%d %H:%M:%S')
-        echo "[$TS] BANNED: $IP (connections: $COUNT, argus_ban: $BAN_TYPE)" >> "$BAN_LOG"
+        echo "[$TS] BANNED: $IP (connections: $COUNT, watchclaw_ban: $BAN_TYPE)" >> "$BAN_LOG"
         BANNED_NEW="${BANNED_NEW}
 🚫 ${IP} (${COUNT} connections, score-ban: ${BAN_TYPE}, connection-ban: applied)"
     fi
@@ -96,7 +106,7 @@ if [ -n "$BANNED_NEW" ] && [ -n "$TELEGRAM_BOT" ]; then
 fi
 
 # ── Also verify existing bans are still effective ────────────────────────────
-INEFFECTIVE=$(threat_verify_bans 2>/dev/null || true)
+INEFFECTIVE=$(orca_verify_bans 2>/dev/null || true)
 if [ -n "$INEFFECTIVE" ]; then
     # Re-apply missing UFW rules silently
     while IFS='|' read -r bip btype breason; do
@@ -108,5 +118,5 @@ if [ -n "$INEFFECTIVE" ]; then
     done <<< "$INEFFECTIVE"
 fi
 
-# ── WatchClaw post-batch: cluster detection + geo anomaly check ────────────────────
+# ── WatchClaw post-batch: cluster detection + geo anomaly check ───────────────
 watchclaw_post_batch 2>/dev/null || true
