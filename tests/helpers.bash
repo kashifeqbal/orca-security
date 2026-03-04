@@ -4,10 +4,10 @@
 # =============================================================================
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-ORCA_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ORCA_LIB="${ORCA_REPO_ROOT}/lib/watchclaw-lib.sh"
-ORCA_INSTALL="${ORCA_REPO_ROOT}/install.sh"
-ORCA_MODULES_DIR="${ORCA_REPO_ROOT}/modules"
+WATCHCLAW_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+WATCHCLAW_LIB="${WATCHCLAW_REPO_ROOT}/lib/watchclaw-lib.sh"
+WATCHCLAW_INSTALL="${WATCHCLAW_REPO_ROOT}/install.sh"
+WATCHCLAW_MODULES_DIR="${WATCHCLAW_REPO_ROOT}/modules"
 
 # ── Setup / Teardown ──────────────────────────────────────────────────────────
 
@@ -17,9 +17,9 @@ setup_orca_env() {
     TEST_TMPDIR="$(mktemp -d)"
     export WATCHCLAW_DIR="${TEST_TMPDIR}/.watchclaw"
     export WATCHCLAW_DB="${WATCHCLAW_DIR}/threat-db.json"
-    export ORCA_REP_CACHE="${WATCHCLAW_DIR}/reputation-cache.json"
-    export ORCA_ASN_DB="${WATCHCLAW_DIR}/asn-db.json"
-    export ORCA_GEO_DB="${WATCHCLAW_DIR}/geo-db.json"
+    export WATCHCLAW_REP_CACHE="${WATCHCLAW_DIR}/reputation-cache.json"
+    export WATCHCLAW_ASN_DB="${WATCHCLAW_DIR}/asn-db.json"
+    export WATCHCLAW_GEO_DB="${WATCHCLAW_DIR}/geo-db.json"
     export WATCHCLAW_STATE="${WATCHCLAW_DIR}/watchclaw-state.json"
     export WATCHCLAW_LOG="${WATCHCLAW_DIR}/watchclaw.log"
 
@@ -32,7 +32,7 @@ setup_orca_env() {
 
     # Source the library
     # shellcheck disable=SC1090
-    source "${ORCA_LIB}"
+    source "${WATCHCLAW_LIB}"
 
     # Initialize state files
     watchclaw_init

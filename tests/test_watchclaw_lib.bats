@@ -39,16 +39,16 @@ teardown() {
 }
 
 @test "watchclaw_init creates reputation-cache.json" {
-    [ -f "${ORCA_REP_CACHE}" ]
+    [ -f "${WATCHCLAW_REP_CACHE}" ]
 }
 
 @test "watchclaw_init creates asn-db.json" {
-    [ -f "${ORCA_ASN_DB}" ]
+    [ -f "${WATCHCLAW_ASN_DB}" ]
 }
 
 @test "watchclaw_init creates geo-db.json with expected shape" {
-    [ -f "${ORCA_GEO_DB}" ]
-    run jq '.countries' "${ORCA_GEO_DB}"
+    [ -f "${WATCHCLAW_GEO_DB}" ]
+    run jq '.countries' "${WATCHCLAW_GEO_DB}"
     [ "$status" -eq 0 ]
 }
 

@@ -13,7 +13,7 @@
 
 load "helpers"
 
-INSTALL_SH="${ORCA_REPO_ROOT}/install.sh"
+INSTALL_SH="${WATCHCLAW_REPO_ROOT}/install.sh"
 
 setup() {
     TEST_TMPDIR="$(mktemp -d)"
@@ -201,25 +201,25 @@ teardown() {
 
 # ── Installer constants ───────────────────────────────────────────────────────
 
-@test "install.sh defines ORCA_INSTALL_DIR as /opt/watchclaw" {
-    result=$(bash -c 'source "'"${INSTALL_SH}"'" --help 2>/dev/null; echo "${ORCA_INSTALL_DIR:-}"' 2>/dev/null || true)
+@test "install.sh defines WATCHCLAW_INSTALL_DIR as /opt/watchclaw" {
+    result=$(bash -c 'source "'"${INSTALL_SH}"'" --help 2>/dev/null; echo "${WATCHCLAW_INSTALL_DIR:-}"' 2>/dev/null || true)
     # Extract from file directly
-    val=$(grep 'ORCA_INSTALL_DIR=' "${INSTALL_SH}" | head -1 | cut -d'"' -f2)
+    val=$(grep 'WATCHCLAW_INSTALL_DIR=' "${INSTALL_SH}" | head -1 | cut -d'"' -f2)
     [ "$val" = "/opt/watchclaw" ]
 }
 
-@test "install.sh defines ORCA_BIN as /usr/local/bin/watchclaw" {
-    val=$(grep 'ORCA_BIN=' "${INSTALL_SH}" | head -1 | cut -d'"' -f2)
+@test "install.sh defines WATCHCLAW_BIN as /usr/local/bin/watchclaw" {
+    val=$(grep 'WATCHCLAW_BIN=' "${INSTALL_SH}" | head -1 | cut -d'"' -f2)
     [ "$val" = "/usr/local/bin/watchclaw" ]
 }
 
-@test "install.sh defines ORCA_CONF as /etc/watchclaw/watchclaw.conf" {
-    val=$(grep 'ORCA_CONF=' "${INSTALL_SH}" | head -1 | cut -d'"' -f2)
+@test "install.sh defines WATCHCLAW_CONF as /etc/watchclaw/watchclaw.conf" {
+    val=$(grep 'WATCHCLAW_CONF=' "${INSTALL_SH}" | head -1 | cut -d'"' -f2)
     [ "$val" = "/etc/watchclaw/watchclaw.conf" ]
 }
 
 @test "install.sh has a VERSION defined" {
-    val=$(grep 'ORCA_VERSION=' "${INSTALL_SH}" | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+    val=$(grep 'WATCHCLAW_VERSION=' "${INSTALL_SH}" | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
     [ -n "$val" ]
 }
 
