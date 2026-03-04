@@ -48,7 +48,7 @@ ORCA_ENRICH_TTL_SECS=86400       # 24h ASN/geo re-resolve
 
 # Telegram
 ORCA_BOT="${OPS_ALERTS_BOT_TOKEN:-}"
-ORCA_CHAT="${ALERTS_TELEGRAM_CHAT:--5206059645}"
+ORCA_CHAT="${ALERTS_TELEGRAM_CHAT:-}"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 _orca_log() {

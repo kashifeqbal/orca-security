@@ -17,7 +17,7 @@ BAN_LOG="/root/.openclaw/workspace/agents/ops/logs/cowrie-bans.log"
 THRESHOLD=20
 UFW="/usr/sbin/ufw"
 TELEGRAM_BOT="${OPS_ALERTS_BOT_TOKEN:-}"
-TELEGRAM_CHAT="${ALERTS_TELEGRAM_CHAT:--5206059645}"
+TELEGRAM_CHAT="${ALERTS_TELEGRAM_CHAT:-}"
 
 # Source WatchClaw library (threat-db.sh is now a compat shim → watchclaw-lib.sh)
 LIB_DIR="$(dirname "$0")/lib"

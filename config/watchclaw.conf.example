@@ -96,7 +96,7 @@ THREAT_FEED_REFRESH=86400              # Seconds between feed refreshes (default
 EXPORT_ENABLE=false
 EXPORT_FORMAT="json"                   # json, plaintext, both
 EXPORT_PATH="/var/lib/watchclaw/export"     # Local export directory
-EXPORT_GITHUB_REPO=""                  # e.g., "kashifeqbal/watchclaw-threats"
+EXPORT_GITHUB_REPO=""                  # e.g., "youruser/watchclaw-threats"
 EXPORT_GITHUB_BRANCH="main"
 EXPORT_MIN_SCORE=25                    # Only export IPs above this score
 

@@ -23,7 +23,7 @@ ENV_FILE="/root/.openclaw/.env"
 
 # ── Config ────────────────────────────────────────────────────────────────────
 BOT="${OPS_ALERTS_BOT_TOKEN:-}"
-CHAT_ID="${ALERTS_TELEGRAM_CHAT:--5206059645}"
+CHAT_ID="${ALERTS_TELEGRAM_CHAT:-}"
 LOG_DIR="/root/.openclaw/workspace/agents/ops/logs"
 POSTURE_LOG="${LOG_DIR}/security-posture.log"
 HEALTH_LOG="${LOG_DIR}/service-health.log"

@@ -14,7 +14,7 @@ ENV_FILE="/root/.openclaw/.env"
 CANARY_STATE="/var/lib/watchclaw/canary/checksums"
 CANARY_LOG="/var/log/watchclaw/canary.log"
 TELEGRAM_BOT="${OPS_ALERTS_BOT_TOKEN:-}"
-TELEGRAM_CHAT="${ALERTS_TELEGRAM_CHAT:--5206059645}"
+TELEGRAM_CHAT="${ALERTS_TELEGRAM_CHAT:-}"
 
 mkdir -p /var/log/watchclaw
 

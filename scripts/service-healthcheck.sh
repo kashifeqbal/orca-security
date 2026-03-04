@@ -6,7 +6,7 @@ ENV_FILE="/root/.openclaw/.env"
 [ -f "$ENV_FILE" ] && set -a && source "$ENV_FILE" && set +a
 
 BOT="${OPS_ALERTS_BOT_TOKEN:-}"
-CHAT_ID="${ALERTS_TELEGRAM_CHAT:--5206059645}"
+CHAT_ID="${ALERTS_TELEGRAM_CHAT:-}"
 LOG="/root/.openclaw/workspace/agents/ops/logs/service-health.log"
 CRON_SOURCE="/root/.openclaw/workspace/config/cron-jobs-source.json"
 CRON_BACKUP="/root/.openclaw/workspace/config/cron-jobs-backup.json"
