@@ -48,15 +48,15 @@ CANARY
             ;;
         *.env*)
             cat > "$path" << 'CANARY'
-DATABASE_URL=postgres://admin:orca_canary_not_real@db.internal:5432/prod
+DATABASE_URL=postgres://admin:watchclaw_canary_not_real@db.internal:5432/prod
 AWS_SECRET_ACCESS_KEY=WatchClaw/CANARY/TOKEN/NOT/REAL/KEY
-STRIPE_SECRET_KEY=sk_live_orca_canary_not_real_key
+STRIPE_SECRET_KEY=sk_live_watchclaw_canary_not_real_key
 CANARY
             ;;
         *credentials*)
             cat > "$path" << 'CANARY'
 [default]
-aws_access_key_id = AKIAORCA0CANARY0TOKEN
+aws_access_key_id = AKIAWATCHCLAW0CANARY00
 aws_secret_access_key = WatchClaw/CANARY/NOT/REAL/wJalrXUtnFEMI
 CANARY
             ;;
