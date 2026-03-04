@@ -220,13 +220,12 @@ LOW = normal. Bots are always scanning. WatchClaw watches, scores, and bans auto
 - [x] Telegram alerts
 - [x] Plain-English reports
 - [x] Auto-ban policy (score-based + instant honeypot-login ban)
-- [ ] One-command installer
-- [ ] Kernel/sysctl hardening module
-- [ ] Canary token module
-- [ ] AbuseIPDB / blocklist.de import
+- [x] One-command installer
+- [x] Kernel/sysctl hardening module
+- [x] Canary token module
+- [x] AbuseIPDB / blocklist.de threat feed import
+- [x] Cross-node sync (Git-based)
 - [ ] Public blocklist export
-- [ ] Cross-node sync (Git-based)
-- [ ] Cross-node sync (API-based)
 - [ ] Discord / Slack / webhook alerts
 - [ ] Web dashboard (optional)
 - [ ] ARM/Raspberry Pi support
