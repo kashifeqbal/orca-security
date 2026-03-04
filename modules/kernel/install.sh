@@ -7,15 +7,15 @@
 # =============================================================================
 
 set -euo pipefail
-source /etc/orca/orca.conf 2>/dev/null || true
+source /etc/watchclaw/watchclaw.conf 2>/dev/null || true
 
-SYSCTL_CONF="/etc/sysctl.d/99-orca-hardening.conf"
+SYSCTL_CONF="/etc/sysctl.d/99-watchclaw-hardening.conf"
 
-log()  { echo -e "\033[0;32m[ORCA:kernel]\033[0m $*"; }
+log()  { echo -e "\033[0;32m[WatchClaw:kernel]\033[0m $*"; }
 
 cat > "$SYSCTL_CONF" << 'EOF'
 # =============================================================================
-# ORCA Kernel Hardening — sysctl settings
+# WatchClaw Kernel Hardening — sysctl settings
 # =============================================================================
 
 # ── TCP/IP Stack Hardening ───────────────────────────────────────────────────

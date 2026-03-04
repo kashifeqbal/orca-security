@@ -4,12 +4,12 @@
 # =============================================================================
 
 set -euo pipefail
-source /etc/orca/orca.conf 2>/dev/null || true
+source /etc/watchclaw/watchclaw.conf 2>/dev/null || true
 
 SSH_PORT="${SSH_PORT:-2222}"
 UFW="/usr/sbin/ufw"
 
-log()  { echo -e "\033[0;32m[ORCA:ufw]\033[0m $*"; }
+log()  { echo -e "\033[0;32m[WatchClaw:ufw]\033[0m $*"; }
 
 # Install UFW if missing
 if ! command -v ufw &>/dev/null; then
@@ -40,13 +40,13 @@ fi
 
 # Extra allowed ports from config
 for port in ${UFW_EXTRA_ALLOW:-}; do
-    $UFW allow "$port" comment "ORCA extra allow"
+    $UFW allow "$port" comment "WatchClaw extra allow"
     log "Allowed extra port: $port"
 done
 
 # Rate-limited ports
 for port in ${UFW_RATE_LIMIT_PORTS:-}; do
-    $UFW limit "$port" comment "ORCA rate-limited"
+    $UFW limit "$port" comment "WatchClaw rate-limited"
     log "Rate-limited port: $port"
 done
 

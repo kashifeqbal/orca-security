@@ -17,7 +17,7 @@ CHAT_ID="${ALERTS_TELEGRAM_CHAT:--5206059645}"
 LOGFILE="/home/cowrie/cowrie/var/log/cowrie/cowrie.json"
 STATEFILE="/root/.openclaw/workspace/agents/ops/logs/cowrie-lastpos"
 
-# Source ORCA library (threat-db.sh is now a compat shim → orca-lib.sh)
+# Source WatchClaw library (threat-db.sh is now a compat shim → watchclaw-lib.sh)
 LIB_DIR="$(dirname "$0")/lib"
 # shellcheck source=scripts/lib/threat-db.sh
 source "${LIB_DIR}/threat-db.sh"
@@ -161,7 +161,7 @@ threat_update_baseline "$TOTAL_EVENTS"
 
 # ── Safety net: direct scan for high-priority events ────────────────────────
 # Independent of PARSE_OUTPUT — guarantees login.success always alerts
-_SAFETY_PY=$(mktemp /tmp/orca-safety-XXXXXX.py)
+_SAFETY_PY=$(mktemp /tmp/watchclaw-safety-XXXXXX.py)
 cat > "$_SAFETY_PY" <<'PYEOF'
 import sys, json
 lines = []
@@ -224,7 +224,7 @@ fi
 # ── Block repeat honeypot abusers from Cowrie itself ─────────────────────────
 # IPs with 5+ successful honeypot logins get dropped on port 22 via iptables
 # This stops them generating more score noise
-COWRIE_BLOCKED=$(python3 - "${ORCA_DB:-${HOME:-/root}/.orca/threat-db.json}" <<'PYEOF' 2>/dev/null
+COWRIE_BLOCKED=$(python3 - "${WATCHCLAW_DB:-${HOME:-/root}/.watchclaw/threat-db.json}" <<'PYEOF' 2>/dev/null
 import sys, json
 db_path = sys.argv[1]
 try:
@@ -247,16 +247,16 @@ for ip in $COWRIE_BLOCKED; do
     fi
 done
 
-# ── ORCA post-batch: cluster detection + geo anomaly checks ───────────────────
-orca_post_batch 2>/dev/null || true
+# ── WatchClaw post-batch: cluster detection + geo anomaly checks ───────────────────
+watchclaw_post_batch 2>/dev/null || true
 
 # ── Score decay (run periodically; cowrie-notify runs every 15m) ──────────────
 # Decay runs at most once per hour to avoid redundant work
-DECAY_LOCKFILE="${ORCA_DIR}/.decay_last_run"
+DECAY_LOCKFILE="${WATCHCLAW_DIR}/.decay_last_run"
 NOW_TS=$(date +%s)
 LAST_DECAY=0
 [ -f "$DECAY_LOCKFILE" ] && LAST_DECAY=$(cat "$DECAY_LOCKFILE" 2>/dev/null || echo 0)
 if [ $(( NOW_TS - LAST_DECAY )) -gt 3600 ]; then
-    orca_decay_all 2>/dev/null || true
+    watchclaw_decay_all 2>/dev/null || true
     echo "$NOW_TS" > "$DECAY_LOCKFILE"
 fi

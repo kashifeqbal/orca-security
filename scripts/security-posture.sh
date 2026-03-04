@@ -28,7 +28,7 @@ LOG_DIR="/root/.openclaw/workspace/agents/ops/logs"
 POSTURE_LOG="${LOG_DIR}/security-posture.log"
 HEALTH_LOG="${LOG_DIR}/service-health.log"
 
-# Source ORCA library (threat-db.sh is now a compat shim → orca-lib.sh)
+# Source WatchClaw library (threat-db.sh is now a compat shim → watchclaw-lib.sh)
 LIB_DIR="$(dirname "$0")/lib"
 # shellcheck source=scripts/lib/threat-db.sh
 source "${LIB_DIR}/threat-db.sh"
@@ -101,9 +101,9 @@ if [ "${#SCRIPT_WARNINGS[@]}" -gt 0 ]; then
 fi
 
 # =============================================================================
-# 2. THREAT DATA — read ORCA threat DB and compute posture
+# 2. THREAT DATA — read WatchClaw threat DB and compute posture
 # =============================================================================
-orca_init
+watchclaw_init
 
 # Rolling 30m threat score
 ROLLING_SCORE=$(threat_rolling_score 30)
@@ -353,8 +353,8 @@ PYEOF
     exit 0
 fi
 
-# ── ORCA enrichment: ASN clusters + geo anomalies + rep risks ─────────────────
-ORCA_ENRICH=$(python3 - "$ORCA_ASN_DB" "$ORCA_GEO_DB" "$ORCA_REP_CACHE" "$ORCA_DB" <<'PYEOF' 2>/dev/null || echo ""
+# ── WatchClaw enrichment: ASN clusters + geo anomalies + rep risks ─────────────────
+ORCA_ENRICH=$(python3 - "$ORCA_ASN_DB" "$ORCA_GEO_DB" "$ORCA_REP_CACHE" "$WATCHCLAW_DB" <<'PYEOF' 2>/dev/null || echo ""
 import sys, json, datetime
 
 asn_db_path, geo_db_path, rep_cache_path, db_path = sys.argv[1:]
@@ -418,13 +418,13 @@ if [ "${ORCA_CLUSTER_CNT:-0}" -gt 0 ] && [ "$SEVERITY" = "LOW" ]; then
     SEVERITY="ELEVATED"
 fi
 
-# ELEVATED, HIGH, CRITICAL → send to Telegram (with rate-limiting via ORCA)
+# ELEVATED, HIGH, CRITICAL → send to Telegram (with rate-limiting via WatchClaw)
 EMOJI="⚠️"
 [ "$SEVERITY" = "ELEVATED" ] && EMOJI="🟠"
 [ "$SEVERITY" = "HIGH" ]     && EMOJI="🔴"
 [ "$SEVERITY" = "CRITICAL" ] && EMOJI="🚨"
 
-TELE_MSG="${EMOJI} *Orca Security Report — $(date '+%Y-%m-%d %H:%M')*
+TELE_MSG="${EMOJI} *WatchClaw Security Report — $(date '+%Y-%m-%d %H:%M')*
 
 ${REPORT}
 
@@ -438,13 +438,13 @@ Intel:
 - Top Countries (7d): ${ORCA_GEO_TOP:-none}
 - Reputation Risks: ${ORCA_REP_RISKS:-none}"
 
-# Use ORCA rate-limited Telegram function
+# Use WatchClaw rate-limited Telegram function
 orca_telegram "$SEVERITY" "$TELE_MSG" 2>/dev/null || send_telegram "$TELE_MSG"
 log_posture "ALERTED: severity=${SEVERITY} clusters=${ORCA_CLUSTERS:-none} geo=${ORCA_GEO_TOP:-none}"
 
-# ── CRITICAL: auto-create GitHub issue (rate limited via ORCA state) ───────────
+# ── CRITICAL: auto-create GitHub issue (rate limited via WatchClaw state) ───────────
 if [ "$SEVERITY" = "CRITICAL" ]; then
-    ISSUE_SCRIPT="$(dirname "$0")/orca-critical-issue.sh"
+    ISSUE_SCRIPT="$(dirname "$0")/watchclaw-critical-issue.sh"
     if [ -x "$ISSUE_SCRIPT" ]; then
         "$ISSUE_SCRIPT" 2>/dev/null || true
         log_posture "CRITICAL: github issue attempted"

@@ -1,36 +1,36 @@
 #!/bin/bash
 # =============================================================================
-# lib/orca-lib.sh — ORCA Threat Intelligence Library v2.0
+# lib/watchclaw-lib.sh — WatchClaw Threat Intelligence Library v2.0
 # =============================================================================
-# ORCA owns: threat state, scoring, enrichment, enforcement, reporting, alerts.
-# State lives exclusively under ~/.orca/
+# WatchClaw owns: threat state, scoring, enrichment, enforcement, reporting, alerts.
+# State lives exclusively under ~/.watchclaw/
 #
 # Exported functions:
-#   orca_init                       — init dirs, migrate from argus
-#   orca_record_event ip type extra — record + enrich + score, returns score
-#   orca_check_and_ban ip           — apply bans based on score, returns ban type
+#   watchclaw_init                       — init dirs, migrate from argus
+#   watchclaw_record_event ip type extra — record + enrich + score, returns score
+#   watchclaw_check_and_ban ip           — apply bans based on score, returns ban type
 #   orca_verify_bans                — check ban effectiveness, print ip|type|reason
-#   orca_post_batch                 — cluster + geo anomaly checks (call after batch)
-#   orca_decay_all                  — apply 10%/24h score decay to all IPs
+#   watchclaw_post_batch                 — cluster + geo anomaly checks (call after batch)
+#   watchclaw_decay_all                  — apply 10%/24h score decay to all IPs
 #   orca_prune_db                   — remove IPs unseen > 45 days
 #   orca_rolling_score [minutes]    — total score for recent activity
 #   orca_update_baseline count      — update event baseline
 #   orca_check_alert_rate severity  — "ok" or "rate_limited"
 #   orca_telegram severity message  — send Telegram with rate-limit guard
-#   orca_status_json                — JSON status for `orca status`
-#   orca_top_json window            — JSON for `orca top`
+#   orca_status_json                — JSON status for `watchclaw status`
+#   orca_top_json window            — JSON for `watchclaw top`
 #   orca_get_score ip               — numeric score
 #   orca_dump_db                    — print full threat-db
 # =============================================================================
 
 # ── State paths ───────────────────────────────────────────────────────────────
-ORCA_DIR="${ORCA_DIR:-${HOME:-/root}/.orca}"
-ORCA_DB="${ORCA_DIR}/threat-db.json"
-ORCA_REP_CACHE="${ORCA_DIR}/reputation-cache.json"
-ORCA_ASN_DB="${ORCA_DIR}/asn-db.json"
-ORCA_GEO_DB="${ORCA_DIR}/geo-db.json"
-ORCA_STATE="${ORCA_DIR}/orca-state.json"
-ORCA_LOG="${ORCA_DIR}/orca.log"
+WATCHCLAW_DIR="${WATCHCLAW_DIR:-${HOME:-/root}/.watchclaw}"
+WATCHCLAW_DB="${WATCHCLAW_DIR}/threat-db.json"
+ORCA_REP_CACHE="${WATCHCLAW_DIR}/reputation-cache.json"
+ORCA_ASN_DB="${WATCHCLAW_DIR}/asn-db.json"
+ORCA_GEO_DB="${WATCHCLAW_DIR}/geo-db.json"
+WATCHCLAW_STATE="${WATCHCLAW_DIR}/watchclaw-state.json"
+WATCHCLAW_LOG="${WATCHCLAW_DIR}/watchclaw.log"
 
 # ── Tuning ────────────────────────────────────────────────────────────────────
 ORCA_CLUSTER_MIN_IPS=5
@@ -53,7 +53,7 @@ ORCA_CHAT="${ALERTS_TELEGRAM_CHAT:--5206059645}"
 # ── Helpers ───────────────────────────────────────────────────────────────────
 _orca_log() {
     local ts; ts=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
-    echo "[$ts] $*" >> "$ORCA_LOG" 2>/dev/null || true
+    echo "[$ts] $*" >> "$WATCHCLAW_LOG" 2>/dev/null || true
 }
 
 _atomic_write() {
@@ -70,22 +70,22 @@ _jq_atomic_update() {
 }
 
 # =============================================================================
-# orca_init — ensure dirs and files exist, migrate from argus if needed
+# watchclaw_init — ensure dirs and files exist, migrate from argus if needed
 # =============================================================================
-orca_init() {
-    mkdir -p "$ORCA_DIR"
-    [ -f "$ORCA_DB" ]         || echo '{}' > "$ORCA_DB"
+watchclaw_init() {
+    mkdir -p "$WATCHCLAW_DIR"
+    [ -f "$WATCHCLAW_DB" ]         || echo '{}' > "$WATCHCLAW_DB"
     [ -f "$ORCA_REP_CACHE" ]  || echo '{}' > "$ORCA_REP_CACHE"
     [ -f "$ORCA_ASN_DB" ]     || echo '{}' > "$ORCA_ASN_DB"
     [ -f "$ORCA_GEO_DB" ]     || echo '{"countries":{},"history":[]}' > "$ORCA_GEO_DB"
-    [ -f "$ORCA_STATE" ]      || echo '{"alert_rates":{},"last_issue_at":"","info_count":0,"event_counts":[],"last_baseline_updated":""}' > "$ORCA_STATE"
+    [ -f "$WATCHCLAW_STATE" ]      || echo '{"alert_rates":{},"last_issue_at":"","info_count":0,"event_counts":[],"last_baseline_updated":""}' > "$WATCHCLAW_STATE"
 
     # One-time migration from argus
     local argus_db="${HOME:-/root}/.argus/threat-db.json"
-    local orca_migrated="${ORCA_DIR}/.migrated_from_argus"
+    local orca_migrated="${WATCHCLAW_DIR}/.migrated_from_argus"
     if [ -f "$argus_db" ] && [ ! -f "$orca_migrated" ]; then
-        # Merge argus records into ORCA DB (don't overwrite existing ORCA records)
-        python3 - "$argus_db" "$ORCA_DB" <<'PYEOF' 2>/dev/null && touch "$orca_migrated" || true
+        # Merge argus records into WatchClaw DB (don't overwrite existing WatchClaw records)
+        python3 - "$argus_db" "$WATCHCLAW_DB" <<'PYEOF' 2>/dev/null && touch "$orca_migrated" || true
 import sys, json, os
 src_path, dst_path = sys.argv[1], sys.argv[2]
 try:
@@ -95,13 +95,13 @@ try:
     with open(dst_path) as f: dst = json.load(f)
 except Exception: dst = {}
 merged = dict(src)
-merged.update(dst)  # ORCA wins on conflict
+merged.update(dst)  # WatchClaw wins on conflict
 tmp = dst_path + '.tmp'
 with open(tmp, 'w') as f: json.dump(merged, f, indent=2)
 os.replace(tmp, dst_path)
-print(f"Migrated {len(src)} argus records into ORCA threat-db", file=sys.stderr)
+print(f"Migrated {len(src)} argus records into WatchClaw threat-db", file=sys.stderr)
 PYEOF
-        _orca_log "INIT migrated argus→orca threat-db"
+        _orca_log "INIT migrated argus→watchclaw threat-db"
     fi
 }
 
@@ -111,7 +111,7 @@ PYEOF
 # =============================================================================
 orca_get_reputation() {
     local ip="$1"
-    orca_init
+    watchclaw_init
 
     # Check cache
     local cached now_ts cache_ts abuse_score
@@ -232,22 +232,22 @@ orca_resolve_geo() {
 }
 
 # =============================================================================
-# orca_record_event <ip> <event_type> [extra_info]
+# watchclaw_record_event <ip> <event_type> [extra_info]
 #
 # Records an event, applies scoring, enriches with rep/asn/geo (cached).
 # Returns updated score to stdout.
 # =============================================================================
-orca_record_event() {
+watchclaw_record_event() {
     local ip="$1"
     local event_type="$2"
     local extra_info="${3:-}"
     [ -z "$ip" ] || [ -z "$event_type" ] && return 1
-    orca_init
+    watchclaw_init
 
     # Step 1: Record event in threat-db (Python handles scoring, decay, classification)
     local new_score enrich_needed
     local result
-    result=$(python3 - "$ip" "$event_type" "$extra_info" "$ORCA_DB" "$ORCA_LOG" <<'PYEOF' 2>/dev/null
+    result=$(python3 - "$ip" "$event_type" "$extra_info" "$WATCHCLAW_DB" "$WATCHCLAW_LOG" <<'PYEOF' 2>/dev/null
 import sys, json, os, datetime, math
 
 ip, event_type, extra_info = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -408,7 +408,7 @@ PYEOF
         [ "$rep_score" -gt 75 ] && rep_bonus=50
 
         # Update threat-db with enrichment data + rep bonus
-        new_score=$(python3 - "$ip" "$asn" "$country" "$rep_score" "$rep_risk" "$rep_bonus" "$ORCA_DB" <<'PYEOF' 2>/dev/null
+        new_score=$(python3 - "$ip" "$asn" "$country" "$rep_score" "$rep_risk" "$rep_bonus" "$WATCHCLAW_DB" <<'PYEOF' 2>/dev/null
 import sys, json, os, datetime
 ip, asn, country, rep_score_str, rep_risk_str, rep_bonus_str, db_path = sys.argv[1:]
 rep_score = int(rep_score_str); rep_risk = rep_risk_str == '1'; rep_bonus = int(rep_bonus_str)
@@ -450,9 +450,9 @@ PYEOF
 orca_asn_update() {
     local ip="$1" asn="$2"
     [ -z "$asn" ] || [ "$asn" = "unknown" ] && return 0
-    orca_init
+    watchclaw_init
 
-    python3 - "$ip" "$asn" "$ORCA_ASN_DB" "$ORCA_DB" <<'PYEOF' 2>/dev/null || true
+    python3 - "$ip" "$asn" "$ORCA_ASN_DB" "$WATCHCLAW_DB" <<'PYEOF' 2>/dev/null || true
 import sys, json, os, datetime
 
 ip, asn, asn_db_path, threat_db_path = sys.argv[1:]
@@ -540,7 +540,7 @@ PYEOF
 orca_geo_update() {
     local ip="$1" country="$2"
     [ -z "$country" ] || [ "$country" = "unknown" ] && return 0
-    orca_init
+    watchclaw_init
 
     python3 - "$ip" "$country" "$ORCA_GEO_DB" <<'PYEOF' 2>/dev/null || true
 import sys, json, os, datetime
@@ -603,13 +603,13 @@ PYEOF
 }
 
 # =============================================================================
-# orca_check_and_ban <ip>  →  prints ban type applied (none|short|long|permanent)
+# watchclaw_check_and_ban <ip>  →  prints ban type applied (none|short|long|permanent)
 # =============================================================================
-orca_check_and_ban() {
+watchclaw_check_and_ban() {
     local ip="$1"
-    orca_init
+    watchclaw_init
 
-    python3 - "$ip" "$ORCA_DB" "$ORCA_LOG" <<'PYEOF' 2>/dev/null
+    python3 - "$ip" "$WATCHCLAW_DB" "$WATCHCLAW_LOG" <<'PYEOF' 2>/dev/null
 import sys, json, os, datetime, subprocess
 
 ip, db_path, log_path = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -670,13 +670,13 @@ for b in bans: b['active'] = False
 # Calculate expiry
 if needed == 'short':
     expires = (now_dt + datetime.timedelta(hours=24)).isoformat() + 'Z'
-    comment = 'orca-short-ban'
+    comment = 'watchclaw-short-ban'
 elif needed == 'long':
     expires = (now_dt + datetime.timedelta(days=7)).isoformat() + 'Z'
-    comment = 'orca-long-ban'
+    comment = 'watchclaw-long-ban'
 else:
     expires = None
-    comment = 'orca-permanent-ban'
+    comment = 'watchclaw-permanent-ban'
 
 # Apply UFW ban (idempotent)
 ufw_ok = False
@@ -694,7 +694,7 @@ except Exception: pass
 
 # Try ipset if available
 try:
-    subprocess.run(['ipset', 'add', 'orca-block', ip, 'comment', comment, '-exist'],
+    subprocess.run(['ipset', 'add', 'watchclaw-block', ip, 'comment', comment, '-exist'],
                    capture_output=True, text=True, timeout=5)
 except Exception: pass
 
@@ -724,9 +724,9 @@ PYEOF
 # Also re-applies missing UFW rules silently.
 # =============================================================================
 orca_verify_bans() {
-    orca_init
+    watchclaw_init
 
-    python3 - "$ORCA_DB" "$ORCA_LOG" <<'PYEOF' 2>/dev/null
+    python3 - "$WATCHCLAW_DB" "$WATCHCLAW_LOG" <<'PYEOF' 2>/dev/null
 import sys, json, os, datetime, subprocess
 
 db_path, log_path = sys.argv[1], sys.argv[2]
@@ -777,15 +777,15 @@ PYEOF
 }
 
 # =============================================================================
-# orca_post_batch  — call after processing a batch of events
+# watchclaw_post_batch  — call after processing a batch of events
 # Checks: ASN cluster alerts, geo anomalies, CRITICAL GitHub issues
 # =============================================================================
-orca_post_batch() {
-    orca_init
+watchclaw_post_batch() {
+    watchclaw_init
 
     # ── ASN cluster detection ────────────────────────────────────────────────
     local cluster_alerts
-    cluster_alerts=$(python3 - "$ORCA_ASN_DB" "$ORCA_STATE" \
+    cluster_alerts=$(python3 - "$ORCA_ASN_DB" "$WATCHCLAW_STATE" \
         "$ORCA_CLUSTER_MIN_IPS" "$ORCA_CLUSTER_MIN_HOSTILE" <<'PYEOF' 2>/dev/null
 import sys, json, os, datetime
 asn_db_path, state_path, min_ips_s, min_hostile_s = sys.argv[1:]
@@ -828,15 +828,15 @@ PYEOF
     if [ -n "$cluster_alerts" ]; then
         while IFS='|' read -r asn n_ips hostile_cnt; do
             [ -z "$asn" ] && continue
-            local msg="🚨 ORCA: Suspicious ASN cluster detected!
+            local msg="🚨 WatchClaw: Suspicious ASN cluster detected!
 
 ASN: ${asn}
 Unique IPs (7d): ${n_ips}
 Hostile offenders: ${hostile_cnt} (botnet/miner/recon)
 
 ⚠️ Recommend ASN block review.
-Run: orca recommend asn-block ${asn}
-Approve: orca enforce ban-asn ${asn} --mode ufw"
+Run: watchclaw recommend asn-block ${asn}
+Approve: watchclaw enforce ban-asn ${asn} --mode ufw"
             orca_telegram "HIGH" "$msg"
             _orca_log "CLUSTER_ALERT asn=$asn ips=$n_ips hostile=$hostile_cnt"
         done <<< "$cluster_alerts"
@@ -844,7 +844,7 @@ Approve: orca enforce ban-asn ${asn} --mode ufw"
 
     # ── Geo anomaly detection (tuned): low-noise, hourly batched alerts ─────
     local geo_anomalies
-    geo_anomalies=$(python3 - "$ORCA_GEO_DB" "$ORCA_STATE" \
+    geo_anomalies=$(python3 - "$ORCA_GEO_DB" "$WATCHCLAW_STATE" \
         "$ORCA_GEO_SPIKE_FACTOR" "$ORCA_GEO_MIN_DAILY" <<'PYEOF' 2>/dev/null
 import sys, json, os, datetime
 
@@ -910,7 +910,7 @@ PYEOF
 
     if [ -n "$geo_anomalies" ]; then
         local geo_rate_ok="0"
-        geo_rate_ok=$(python3 - "$ORCA_STATE" <<'PYEOF' 2>/dev/null || echo "0"
+        geo_rate_ok=$(python3 - "$WATCHCLAW_STATE" <<'PYEOF' 2>/dev/null || echo "0"
 import sys, json, os, datetime
 state_path = sys.argv[1]
 now = datetime.datetime.utcnow()
@@ -954,7 +954,7 @@ PYEOF
                 _orca_log "GEO_ANOMALY type=$anomaly_type country=$country count=$count baseline=$baseline"
             done <<< "$geo_anomalies"
 
-            local geo_msg="🌍 ORCA: Geo anomaly batch (${geo_count} country/countries)\n\n${geo_lines}\nThresholds: new-country>=25 + unseen 7d OR >${ORCA_GEO_SPIKE_FACTOR}x baseline (baseline>=${ORCA_GEO_MIN_DAILY})."
+            local geo_msg="🌍 WatchClaw: Geo anomaly batch (${geo_count} country/countries)\n\n${geo_lines}\nThresholds: new-country>=25 + unseen 7d OR >${ORCA_GEO_SPIKE_FACTOR}x baseline (baseline>=${ORCA_GEO_MIN_DAILY})."
             orca_telegram "MEDIUM" "$geo_msg"
         else
             _orca_log "GEO_ANOMALY suppressed by hourly rate limit"
@@ -963,12 +963,12 @@ PYEOF
 }
 
 # =============================================================================
-# orca_decay_all  — apply 10%/24h score decay to all IPs in threat-db
+# watchclaw_decay_all  — apply 10%/24h score decay to all IPs in threat-db
 # =============================================================================
-orca_decay_all() {
-    orca_init
+watchclaw_decay_all() {
+    watchclaw_init
 
-    python3 - "$ORCA_DB" "$ORCA_LOG" <<'PYEOF' 2>/dev/null || true
+    python3 - "$WATCHCLAW_DB" "$WATCHCLAW_LOG" <<'PYEOF' 2>/dev/null || true
 import sys, json, os, datetime, math
 
 db_path, log_path = sys.argv[1], sys.argv[2]
@@ -1011,9 +1011,9 @@ PYEOF
 # orca_prune_db  — remove IPs unseen > 45 days
 # =============================================================================
 orca_prune_db() {
-    orca_init
+    watchclaw_init
 
-    python3 - "$ORCA_DB" "$ORCA_LOG" "$ORCA_PRUNE_DAYS" <<'PYEOF' 2>/dev/null || true
+    python3 - "$WATCHCLAW_DB" "$WATCHCLAW_LOG" "$ORCA_PRUNE_DAYS" <<'PYEOF' 2>/dev/null || true
 import sys, json, os, datetime
 
 db_path, log_path, prune_days_s = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -1051,9 +1051,9 @@ PYEOF
 # =============================================================================
 orca_rolling_score() {
     local minutes="${1:-30}"
-    orca_init
+    watchclaw_init
 
-    python3 - "$minutes" "$ORCA_DB" <<'PYEOF' 2>/dev/null
+    python3 - "$minutes" "$WATCHCLAW_DB" <<'PYEOF' 2>/dev/null
 import sys, json, datetime
 minutes = int(sys.argv[1])
 db_path = sys.argv[2]
@@ -1088,9 +1088,9 @@ PYEOF
 # =============================================================================
 orca_update_baseline() {
     local count="${1:-0}"
-    orca_init
+    watchclaw_init
 
-    python3 - "$count" "$ORCA_STATE" <<'PYEOF' 2>/dev/null || true
+    python3 - "$count" "$WATCHCLAW_STATE" <<'PYEOF' 2>/dev/null || true
 import sys, json, os, datetime
 count, state_path = int(sys.argv[1]), sys.argv[2]
 now_iso = datetime.datetime.utcnow().isoformat() + 'Z'
@@ -1114,9 +1114,9 @@ PYEOF
 # =============================================================================
 orca_check_alert_rate() {
     local severity="${1:-MEDIUM}"
-    orca_init
+    watchclaw_init
 
-    python3 - "$severity" "$ORCA_STATE" "$ORCA_ALERT_RATE_MINS" <<'PYEOF' 2>/dev/null
+    python3 - "$severity" "$WATCHCLAW_STATE" "$ORCA_ALERT_RATE_MINS" <<'PYEOF' 2>/dev/null
 import sys, json, os, datetime
 severity, state_path, rate_mins_s = sys.argv[1], sys.argv[2], sys.argv[3]
 rate_secs = int(rate_mins_s) * 60
@@ -1178,9 +1178,9 @@ orca_telegram() {
 # orca_status_json  →  JSON status summary
 # =============================================================================
 orca_status_json() {
-    orca_init
+    watchclaw_init
 
-    python3 - "$ORCA_DB" "$ORCA_ASN_DB" "$ORCA_GEO_DB" "$ORCA_STATE" "$ORCA_REP_CACHE" <<'PYEOF' 2>/dev/null
+    python3 - "$WATCHCLAW_DB" "$ORCA_ASN_DB" "$ORCA_GEO_DB" "$WATCHCLAW_STATE" "$ORCA_REP_CACHE" <<'PYEOF' 2>/dev/null
 import sys, json, datetime, statistics
 
 db_path, asn_db_path, geo_db_path, state_path, rep_cache_path = sys.argv[1:]
@@ -1286,9 +1286,9 @@ PYEOF
 # =============================================================================
 orca_top_json() {
     local window="${1:-24h}"
-    orca_init
+    watchclaw_init
 
-    python3 - "$window" "$ORCA_DB" <<'PYEOF' 2>/dev/null
+    python3 - "$window" "$WATCHCLAW_DB" <<'PYEOF' 2>/dev/null
 import sys, json, datetime
 
 window, db_path = sys.argv[1], sys.argv[2]
@@ -1333,16 +1333,16 @@ PYEOF
 # =============================================================================
 orca_get_score() {
     local ip="$1"
-    orca_init
-    jq -r --arg ip "$ip" '.[$ip].score // 0' "$ORCA_DB" 2>/dev/null || echo 0
+    watchclaw_init
+    jq -r --arg ip "$ip" '.[$ip].score // 0' "$WATCHCLAW_DB" 2>/dev/null || echo 0
 }
 
 # =============================================================================
 # orca_dump_db  →  full threat-db JSON
 # =============================================================================
 orca_dump_db() {
-    orca_init
-    cat "$ORCA_DB"
+    watchclaw_init
+    cat "$WATCHCLAW_DB"
 }
 
 # =============================================================================
@@ -1351,9 +1351,9 @@ orca_dump_db() {
 # These allow existing scripts (cowrie-notify, cowrie-autoban, security-posture)
 # to continue working without modification.
 
-argus_init()            { orca_init "$@"; }
-threat_record_event()   { orca_record_event "$@"; }
-threat_check_and_ban()  { orca_check_and_ban "$@"; }
+argus_init()            { watchclaw_init "$@"; }
+threat_record_event()   { watchclaw_record_event "$@"; }
+threat_check_and_ban()  { watchclaw_check_and_ban "$@"; }
 threat_verify_bans()    { orca_verify_bans "$@"; }
 threat_get_score()      { orca_get_score "$@"; }
 threat_dump_db()        { orca_dump_db "$@"; }
@@ -1362,8 +1362,8 @@ threat_update_baseline(){ orca_update_baseline "$@"; }
 
 threat_baseline_check() {
     local current="${1:-0}"
-    orca_init
-    python3 - "$current" "$ORCA_STATE" <<'PYEOF' 2>/dev/null
+    watchclaw_init
+    python3 - "$current" "$WATCHCLAW_STATE" <<'PYEOF' 2>/dev/null
 import sys, json, statistics
 current = int(sys.argv[1])
 state_path = sys.argv[2]

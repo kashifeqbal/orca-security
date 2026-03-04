@@ -1,11 +1,11 @@
-# 🐋 ORCA — Open Runtime Containment & Analysis
+# 🐋 WatchClaw — Open Runtime Containment & Analysis
 
 **One-command security hardening + threat intelligence for any Linux server.**
 
-ORCA turns a naked VPS into a hardened, self-defending machine with real-time threat scoring, automated banning, honeypot deception, and cross-node threat sharing — in under 10 minutes.
+WatchClaw turns a naked VPS into a hardened, self-defending machine with real-time threat scoring, automated banning, honeypot deception, and cross-node threat sharing — in under 10 minutes.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kashifeqbal/orca-security/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/kashifeqbal/watchclaw/main/install.sh | bash
 ```
 
 ---
@@ -31,13 +31,13 @@ curl -fsSL https://raw.githubusercontent.com/kashifeqbal/orca-security/main/inst
 
 ### Standalone (no agents)
 ```bash
-orca install --standalone
+watchclaw install --standalone
 ```
 Pure bash. Cron-driven. No dependencies beyond Python 3, UFW, fail2ban. Works on any Debian/Ubuntu VPS.
 
 ### With OpenClaw Agents
 ```bash
-orca install --with-agents
+watchclaw install --with-agents
 ```
 Adds AI-powered analysis, natural language reports, RPC commands, and proactive threat hunting via OpenClaw.
 
@@ -47,32 +47,32 @@ Adds AI-powered analysis, natural language reports, RPC commands, and proactive 
 
 ```bash
 # 1. Clone
-git clone https://github.com/kashifeqbal/orca-security.git
-cd orca-security
+git clone https://github.com/kashifeqbal/watchclaw.git
+cd watchclaw
 
 # 2. Configure
-cp config/orca.conf.example config/orca.conf
-nano config/orca.conf  # Set your SSH key, alert webhook, etc.
+cp config/watchclaw.conf.example config/watchclaw.conf
+nano config/watchclaw.conf  # Set your SSH key, alert webhook, etc.
 
 # 3. Install
 sudo ./install.sh
 
 # 4. Verify
-orca status
+watchclaw status
 ```
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────┐
-│                 ORCA Engine                   │
+│                 WatchClaw Engine                   │
 │  ┌─────────┐ ┌──────────┐ ┌──────────────┐  │
 │  │ Scoring  │ │ Ban      │ │ Threat Feed  │  │
 │  │ Engine   │ │ Policy   │ │ Import/Export│  │
 │  └────┬─────┘ └────┬─────┘ └──────┬───────┘  │
 │       │            │               │          │
 │  ┌────▼────────────▼───────────────▼───────┐  │
-│  │           lib/orca-lib.sh               │  │
+│  │           lib/watchclaw-lib.sh               │  │
 │  │     (core: state, scoring, bans)        │  │
 │  └─────────────────────────────────────────┘  │
 └──────────────┬──────────────────┬─────────────┘
@@ -98,38 +98,38 @@ orca status
 Each module is independent. Install what you need:
 
 ```bash
-orca module enable cowrie        # SSH honeypot
-orca module enable ssh-harden    # SSH hardening
-orca module enable ufw-baseline  # Firewall rules
-orca module enable fail2ban      # Brute-force protection
-orca module enable kernel        # Kernel/sysctl hardening
-orca module enable canary        # Tripwire canary tokens
-orca module enable threat-feed   # Import/export threat intel
-orca module enable sync          # Cross-node threat sharing
+watchclaw module enable cowrie        # SSH honeypot
+watchclaw module enable ssh-harden    # SSH hardening
+watchclaw module enable ufw-baseline  # Firewall rules
+watchclaw module enable fail2ban      # Brute-force protection
+watchclaw module enable kernel        # Kernel/sysctl hardening
+watchclaw module enable canary        # Tripwire canary tokens
+watchclaw module enable threat-feed   # Import/export threat intel
+watchclaw module enable sync          # Cross-node threat sharing
 ```
 
 ## Commands
 
 ```bash
-orca status              # System health + security posture
-orca report              # Full security report (plain English)
-orca threats             # Active threats with scores
-orca ban <ip>            # Manual ban
-orca unban <ip>          # Remove ban
-orca export              # Export blocklist (JSON + plaintext)
-orca import              # Pull latest threat feeds
-orca sync push           # Push threat DB to shared repo
-orca sync pull           # Pull threat DB from shared repo
-orca module list         # List installed modules
-orca module enable <m>   # Enable a module
-orca module disable <m>  # Disable a module
-orca selftest            # Run all checks
+watchclaw status              # System health + security posture
+watchclaw report              # Full security report (plain English)
+watchclaw threats             # Active threats with scores
+watchclaw ban <ip>            # Manual ban
+watchclaw unban <ip>          # Remove ban
+watchclaw export              # Export blocklist (JSON + plaintext)
+watchclaw import              # Pull latest threat feeds
+watchclaw sync push           # Push threat DB to shared repo
+watchclaw sync pull           # Pull threat DB from shared repo
+watchclaw module list         # List installed modules
+watchclaw module enable <m>   # Enable a module
+watchclaw module disable <m>  # Disable a module
+watchclaw selftest            # Run all checks
 ```
 
 ## Alert Channels
 
 ```bash
-# config/orca.conf
+# config/watchclaw.conf
 ALERT_TELEGRAM_TOKEN="your-bot-token"
 ALERT_TELEGRAM_CHAT="-1001234567890"
 
@@ -145,19 +145,19 @@ ALERT_WEBHOOK_URL="https://your-endpoint.com/alerts"
 
 ## Public Threat Feed
 
-ORCA can export your threat intelligence as a public blocklist:
+WatchClaw can export your threat intelligence as a public blocklist:
 
 ```bash
-orca export --format=plaintext > blocklist.txt    # IP list
-orca export --format=json > threat-feed.json      # Full intel
-orca export --publish-github                       # Auto-push to GitHub Pages
+watchclaw export --format=plaintext > blocklist.txt    # IP list
+watchclaw export --format=json > threat-feed.json      # Full intel
+watchclaw export --publish-github                       # Auto-push to GitHub Pages
 ```
 
-Other ORCA users can import your feed:
+Other WatchClaw users can import your feed:
 ```bash
-# config/orca.conf
+# config/watchclaw.conf
 THREAT_FEEDS=(
-    "https://raw.githubusercontent.com/kashifeqbal/orca-threats/main/blocklist.json"
+    "https://raw.githubusercontent.com/kashifeqbal/watchclaw-threats/main/blocklist.json"
     "https://lists.blocklist.de/lists/ssh.txt"
 )
 ```

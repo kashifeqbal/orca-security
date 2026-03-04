@@ -1,5 +1,5 @@
 #!/bin/bash
-# ORCA preflight: syntax + warning guard for ops scripts
+# WatchClaw preflight: syntax + warning guard for ops scripts
 # - fails fast when parser warnings/errors are detected
 # - emits at most one alert per unique warning signature per hour
 
@@ -10,7 +10,7 @@ ENV_FILE="/root/.openclaw/.env"
 
 BOT="${OPS_ALERTS_BOT_TOKEN:-}"
 CHAT_ID="${ALERTS_TELEGRAM_CHAT:--5206059645}"
-STATE_FILE="/root/.openclaw/workspace/agents/ops/logs/orca-preflight-state.json"
+STATE_FILE="/root/.openclaw/workspace/agents/ops/logs/watchclaw-preflight-state.json"
 SCRIPTS_DIR="/root/.openclaw/workspace/agents/ops/scripts"
 
 mkdir -p "$(dirname "$STATE_FILE")"
@@ -36,10 +36,10 @@ while IFS= read -r f; do
   fi
 done < <(find "$SCRIPTS_DIR" -type f -name "*.sh" | sort)
 
-# Runtime smoke test: ensure ORCA init works even if HOME is unset
-RUNTIME_OUT=$(env -u HOME bash -lc 'source /root/.openclaw/workspace/agents/ops/scripts/lib/orca-lib.sh && orca_init && echo ok' 2>&1 || true)
+# Runtime smoke test: ensure WatchClaw init works even if HOME is unset
+RUNTIME_OUT=$(env -u HOME bash -lc 'source /root/.openclaw/workspace/agents/ops/scripts/lib/watchclaw-lib.sh && watchclaw_init && echo ok' 2>&1 || true)
 if ! echo "$RUNTIME_OUT" | grep -q '^ok$'; then
-  warnings+="runtime: env -u HOME orca_init failed: ${RUNTIME_OUT}"$'\n'
+  warnings+="runtime: env -u HOME watchclaw_init failed: ${RUNTIME_OUT}"$'\n'
 fi
 
 if [ -z "$warnings" ]; then
@@ -54,7 +54,7 @@ last_sig=$(jq -r '.last_signature // ""' "$STATE_FILE" 2>/dev/null || echo "")
 
 # Alert only if signature changed OR >1h since last alert
 if [ "$sig" != "$last_sig" ] || [ $((now - last_ts)) -ge 3600 ]; then
-  msg="🚨 ORCA Preflight failed\n\n$(printf '%s' "$warnings" | head -n 12)"
+  msg="🚨 WatchClaw Preflight failed\n\n$(printf '%s' "$warnings" | head -n 12)"
   send_alert "$msg"
   jq -n --argjson ts "$now" --arg sig "$sig" '{last_alert_ts:$ts,last_signature:$sig}' > "$STATE_FILE"
 fi

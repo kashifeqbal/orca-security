@@ -168,10 +168,10 @@ teardown() {
 # ── setup_dirs function ───────────────────────────────────────────────────────
 
 @test "setup_dirs creates install dir hierarchy" {
-    local tmp_install="${TEST_TMPDIR}/opt/orca"
-    local tmp_state="${TEST_TMPDIR}/var/lib/orca"
-    local tmp_log="${TEST_TMPDIR}/var/log/orca"
-    local tmp_etc="${TEST_TMPDIR}/etc/orca"
+    local tmp_install="${TEST_TMPDIR}/opt/watchclaw"
+    local tmp_state="${TEST_TMPDIR}/var/lib/watchclaw"
+    local tmp_log="${TEST_TMPDIR}/var/log/watchclaw"
+    local tmp_etc="${TEST_TMPDIR}/etc/watchclaw"
 
     mkdir -p "$tmp_install" "$tmp_state" "$tmp_log" "$tmp_etc"
     mkdir -p "${tmp_state}/export" "${tmp_state}/sync" "${tmp_state}/canary"
@@ -201,21 +201,21 @@ teardown() {
 
 # ── Installer constants ───────────────────────────────────────────────────────
 
-@test "install.sh defines ORCA_INSTALL_DIR as /opt/orca" {
+@test "install.sh defines ORCA_INSTALL_DIR as /opt/watchclaw" {
     result=$(bash -c 'source "'"${INSTALL_SH}"'" --help 2>/dev/null; echo "${ORCA_INSTALL_DIR:-}"' 2>/dev/null || true)
     # Extract from file directly
     val=$(grep 'ORCA_INSTALL_DIR=' "${INSTALL_SH}" | head -1 | cut -d'"' -f2)
-    [ "$val" = "/opt/orca" ]
+    [ "$val" = "/opt/watchclaw" ]
 }
 
-@test "install.sh defines ORCA_BIN as /usr/local/bin/orca" {
+@test "install.sh defines ORCA_BIN as /usr/local/bin/watchclaw" {
     val=$(grep 'ORCA_BIN=' "${INSTALL_SH}" | head -1 | cut -d'"' -f2)
-    [ "$val" = "/usr/local/bin/orca" ]
+    [ "$val" = "/usr/local/bin/watchclaw" ]
 }
 
-@test "install.sh defines ORCA_CONF as /etc/orca/orca.conf" {
+@test "install.sh defines ORCA_CONF as /etc/watchclaw/watchclaw.conf" {
     val=$(grep 'ORCA_CONF=' "${INSTALL_SH}" | head -1 | cut -d'"' -f2)
-    [ "$val" = "/etc/orca/orca.conf" ]
+    [ "$val" = "/etc/watchclaw/watchclaw.conf" ]
 }
 
 @test "install.sh has a VERSION defined" {

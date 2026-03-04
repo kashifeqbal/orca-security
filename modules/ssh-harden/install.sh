@@ -9,13 +9,13 @@
 # =============================================================================
 
 set -euo pipefail
-source /etc/orca/orca.conf 2>/dev/null || true
+source /etc/watchclaw/watchclaw.conf 2>/dev/null || true
 
 SSH_PORT="${SSH_PORT:-2222}"
 SSH_CONF="/etc/ssh/sshd_config"
-SSH_CONF_BACKUP="${SSH_CONF}.orca-backup"
+SSH_CONF_BACKUP="${SSH_CONF}.watchclaw-backup"
 
-log()  { echo -e "\033[0;32m[ORCA:ssh-harden]\033[0m $*"; }
+log()  { echo -e "\033[0;32m[WatchClaw:ssh-harden]\033[0m $*"; }
 warn() { echo -e "\033[0;33m[WARN]\033[0m $*"; }
 err()  { echo -e "\033[0;31m[ERROR]\033[0m $*" >&2; }
 

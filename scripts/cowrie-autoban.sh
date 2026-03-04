@@ -19,7 +19,7 @@ UFW="/usr/sbin/ufw"
 TELEGRAM_BOT="${OPS_ALERTS_BOT_TOKEN:-}"
 TELEGRAM_CHAT="${ALERTS_TELEGRAM_CHAT:--5206059645}"
 
-# Source ORCA library (threat-db.sh is now a compat shim → orca-lib.sh)
+# Source WatchClaw library (threat-db.sh is now a compat shim → watchclaw-lib.sh)
 LIB_DIR="$(dirname "$0")/lib"
 # shellcheck source=scripts/lib/threat-db.sh
 source "${LIB_DIR}/threat-db.sh"
@@ -101,12 +101,12 @@ if [ -n "$INEFFECTIVE" ]; then
     # Re-apply missing UFW rules silently
     while IFS='|' read -r bip btype breason; do
         if [ -n "$bip" ]; then
-            $UFW deny from "$bip" to any comment "orca-reapplied" 2>/dev/null || true
+            $UFW deny from "$bip" to any comment "watchclaw-reapplied" 2>/dev/null || true
             TS=$(date '+%Y-%m-%d %H:%M:%S')
             echo "[$TS] REAPPLIED BAN: $bip ($btype) reason: $breason" >> "$BAN_LOG"
         fi
     done <<< "$INEFFECTIVE"
 fi
 
-# ── ORCA post-batch: cluster detection + geo anomaly check ────────────────────
-orca_post_batch 2>/dev/null || true
+# ── WatchClaw post-batch: cluster detection + geo anomaly check ────────────────────
+watchclaw_post_batch 2>/dev/null || true

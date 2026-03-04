@@ -7,13 +7,13 @@
 # =============================================================================
 
 set -euo pipefail
-source /etc/orca/orca.conf 2>/dev/null || true
+source /etc/watchclaw/watchclaw.conf 2>/dev/null || true
 
 COWRIE_USER="${COWRIE_USER:-cowrie}"
 COWRIE_DIR="${COWRIE_DIR:-/home/${COWRIE_USER}/cowrie}"
 COWRIE_REPO="https://github.com/cowrie/cowrie.git"
 
-log()  { echo -e "\033[0;32m[ORCA:cowrie]\033[0m $*"; }
+log()  { echo -e "\033[0;32m[WatchClaw:cowrie]\033[0m $*"; }
 warn() { echo -e "\033[0;33m[WARN]\033[0m $*"; }
 
 # Check if Cowrie already installed

@@ -11,12 +11,12 @@ set -euo pipefail
 ENV_FILE="/root/.openclaw/.env"
 [ -f "$ENV_FILE" ] && set -a && source "$ENV_FILE" && set +a
 
-CANARY_STATE="/var/lib/orca/canary/checksums"
-CANARY_LOG="/var/log/orca/canary.log"
+CANARY_STATE="/var/lib/watchclaw/canary/checksums"
+CANARY_LOG="/var/log/watchclaw/canary.log"
 TELEGRAM_BOT="${OPS_ALERTS_BOT_TOKEN:-}"
 TELEGRAM_CHAT="${ALERTS_TELEGRAM_CHAT:--5206059645}"
 
-mkdir -p /var/log/orca
+mkdir -p /var/log/watchclaw
 
 [ ! -f "$CANARY_STATE" ] && exit 0
 

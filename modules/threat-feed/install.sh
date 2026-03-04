@@ -7,34 +7,34 @@
 # =============================================================================
 
 set -euo pipefail
-source /etc/orca/orca.conf 2>/dev/null || true
+source /etc/watchclaw/watchclaw.conf 2>/dev/null || true
 
-ORCA_STATE="${ORCA_STATE_DIR:-/var/lib/orca}"
-FEED_DIR="${ORCA_STATE}/feeds"
-EXPORT_DIR="${ORCA_STATE}/export"
+WATCHCLAW_STATE="${WATCHCLAW_STATE_DIR:-/var/lib/watchclaw}"
+FEED_DIR="${WATCHCLAW_STATE}/feeds"
+EXPORT_DIR="${WATCHCLAW_STATE}/export"
 
-log()  { echo -e "\033[0;32m[ORCA:threat-feed]\033[0m $*"; }
+log()  { echo -e "\033[0;32m[WatchClaw:threat-feed]\033[0m $*"; }
 
 mkdir -p "$FEED_DIR" "$EXPORT_DIR"
 
 # ── Create import script ─────────────────────────────────────────────────────
-cat > /opt/orca/scripts/orca-import.sh << 'IMPORTEOF'
+cat > /opt/watchclaw/scripts/watchclaw-import.sh << 'IMPORTEOF'
 #!/bin/bash
 # Import threat intelligence from configured feeds
 set -euo pipefail
-source /etc/orca/orca.conf 2>/dev/null || true
+source /etc/watchclaw/watchclaw.conf 2>/dev/null || true
 
-ORCA_STATE="${ORCA_STATE_DIR:-/var/lib/orca}"
-FEED_DIR="${ORCA_STATE}/feeds"
-ORCA_DB="${ORCA_DIR:-/var/lib/orca}/threat-db.json"
-IMPORT_LOG="/var/log/orca/import.log"
+WATCHCLAW_STATE="${WATCHCLAW_STATE_DIR:-/var/lib/watchclaw}"
+FEED_DIR="${WATCHCLAW_STATE}/feeds"
+WATCHCLAW_DB="${WATCHCLAW_DIR:-/var/lib/watchclaw}/threat-db.json"
+IMPORT_LOG="/var/log/watchclaw/import.log"
 UFW="/usr/sbin/ufw"
 
 log()  { echo "[$(date -Iseconds)] $*" | tee -a "$IMPORT_LOG"; }
 
 FEEDS=(${THREAT_FEEDS[@]:-})
 if [ ${#FEEDS[@]} -eq 0 ]; then
-    log "No threat feeds configured. Add THREAT_FEEDS to /etc/orca/orca.conf"
+    log "No threat feeds configured. Add THREAT_FEEDS to /etc/watchclaw/watchclaw.conf"
     exit 0
 fi
 
@@ -69,18 +69,18 @@ done
 
 log "Total imported: $TOTAL_IMPORTED IPs from ${#FEEDS[@]} feeds"
 IMPORTEOF
-chmod +x /opt/orca/scripts/orca-import.sh
+chmod +x /opt/watchclaw/scripts/watchclaw-import.sh
 
 # ── Create export script ─────────────────────────────────────────────────────
-cat > /opt/orca/scripts/orca-export.sh << 'EXPORTEOF'
+cat > /opt/watchclaw/scripts/watchclaw-export.sh << 'EXPORTEOF'
 #!/bin/bash
-# Export ORCA threat intelligence as public blocklist
+# Export WatchClaw threat intelligence as public blocklist
 set -euo pipefail
-source /etc/orca/orca.conf 2>/dev/null || true
+source /etc/watchclaw/watchclaw.conf 2>/dev/null || true
 
-ORCA_STATE="${ORCA_STATE_DIR:-/var/lib/orca}"
-EXPORT_DIR="${ORCA_STATE}/export"
-ORCA_DB="${ORCA_DIR:-/var/lib/orca}/threat-db.json"
+WATCHCLAW_STATE="${WATCHCLAW_STATE_DIR:-/var/lib/watchclaw}"
+EXPORT_DIR="${WATCHCLAW_STATE}/export"
+WATCHCLAW_DB="${WATCHCLAW_DIR:-/var/lib/watchclaw}/threat-db.json"
 MIN_SCORE="${EXPORT_MIN_SCORE:-25}"
 
 log()  { echo "[$(date -Iseconds)] $*"; }
@@ -88,7 +88,7 @@ log()  { echo "[$(date -Iseconds)] $*"; }
 mkdir -p "$EXPORT_DIR"
 
 # Generate exports
-python3 - "$ORCA_DB" "$EXPORT_DIR" "$MIN_SCORE" << 'PYEOF'
+python3 - "$WATCHCLAW_DB" "$EXPORT_DIR" "$MIN_SCORE" << 'PYEOF'
 import sys, json, datetime
 
 db_path, export_dir, min_score = sys.argv[1], sys.argv[2], int(sys.argv[3])
@@ -127,7 +127,7 @@ plaintext.sort()
 
 # JSON export
 feed = {
-    'name': 'ORCA Threat Feed',
+    'name': 'WatchClaw Threat Feed',
     'generated': now,
     'total_ips': len(entries),
     'min_score': min_score,
@@ -138,7 +138,7 @@ with open(f'{export_dir}/blocklist.json', 'w') as f:
 
 # Plaintext export (one IP per line)
 with open(f'{export_dir}/blocklist.txt', 'w') as f:
-    f.write(f'# ORCA Threat Feed — generated {now}\n')
+    f.write(f'# WatchClaw Threat Feed — generated {now}\n')
     f.write(f'# IPs with score >= {min_score}\n')
     f.write(f'# Total: {len(plaintext)}\n')
     for ip in plaintext:
@@ -158,7 +158,7 @@ PYEOF
 
 # Push to GitHub if configured
 if [ -n "${EXPORT_GITHUB_REPO:-}" ]; then
-    EXPORT_GIT_DIR="${ORCA_STATE}/export-repo"
+    EXPORT_GIT_DIR="${WATCHCLAW_STATE}/export-repo"
     if [ ! -d "$EXPORT_GIT_DIR/.git" ]; then
         git clone "git@github.com:${EXPORT_GITHUB_REPO}.git" "$EXPORT_GIT_DIR" 2>/dev/null || \
         git clone "https://github.com/${EXPORT_GITHUB_REPO}.git" "$EXPORT_GIT_DIR"
@@ -167,7 +167,7 @@ if [ -n "${EXPORT_GITHUB_REPO:-}" ]; then
     cd "$EXPORT_GIT_DIR"
     git add -A
     git diff --cached --quiet || {
-        git commit -m "ORCA threat feed update $(date -Iseconds)"
+        git commit -m "WatchClaw threat feed update $(date -Iseconds)"
         git push origin "${EXPORT_GITHUB_BRANCH:-main}"
         log "Pushed to GitHub: ${EXPORT_GITHUB_REPO}"
     }
@@ -175,6 +175,6 @@ fi
 
 log "Export complete"
 EXPORTEOF
-chmod +x /opt/orca/scripts/orca-export.sh
+chmod +x /opt/watchclaw/scripts/watchclaw-export.sh
 
 log "✅ Threat feed module installed (import + export scripts)"

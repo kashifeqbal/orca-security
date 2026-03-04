@@ -224,67 +224,67 @@ teardown() {
     grep -q 'set -euo pipefail' "${ORCA_MODULES_DIR}/canary/install.sh"
 }
 
-# ── lib/orca-lib.sh checks ────────────────────────────────────────────────────
+# ── lib/watchclaw-lib.sh checks ────────────────────────────────────────────────────
 
-@test "orca-lib.sh passes bash syntax check" {
-    run bash -n "${ORCA_REPO_ROOT}/lib/orca-lib.sh"
+@test "watchclaw-lib.sh passes bash syntax check" {
+    run bash -n "${ORCA_REPO_ROOT}/lib/watchclaw-lib.sh"
     [ "$status" -eq 0 ]
 }
 
-@test "orca-lib.sh exports orca_init function" {
-    grep -q 'orca_init()' "${ORCA_REPO_ROOT}/lib/orca-lib.sh"
+@test "watchclaw-lib.sh exports watchclaw_init function" {
+    grep -q 'watchclaw_init()' "${ORCA_REPO_ROOT}/lib/watchclaw-lib.sh"
 }
 
-@test "orca-lib.sh exports orca_record_event function" {
-    grep -q 'orca_record_event()' "${ORCA_REPO_ROOT}/lib/orca-lib.sh"
+@test "watchclaw-lib.sh exports watchclaw_record_event function" {
+    grep -q 'watchclaw_record_event()' "${ORCA_REPO_ROOT}/lib/watchclaw-lib.sh"
 }
 
-@test "orca-lib.sh exports orca_check_and_ban function" {
-    grep -q 'orca_check_and_ban()' "${ORCA_REPO_ROOT}/lib/orca-lib.sh"
+@test "watchclaw-lib.sh exports watchclaw_check_and_ban function" {
+    grep -q 'watchclaw_check_and_ban()' "${ORCA_REPO_ROOT}/lib/watchclaw-lib.sh"
 }
 
-@test "orca-lib.sh exports orca_decay_all function" {
-    grep -q 'orca_decay_all()' "${ORCA_REPO_ROOT}/lib/orca-lib.sh"
+@test "watchclaw-lib.sh exports watchclaw_decay_all function" {
+    grep -q 'watchclaw_decay_all()' "${ORCA_REPO_ROOT}/lib/watchclaw-lib.sh"
 }
 
-@test "orca-lib.sh exports orca_prune_db function" {
-    grep -q 'orca_prune_db()' "${ORCA_REPO_ROOT}/lib/orca-lib.sh"
+@test "watchclaw-lib.sh exports orca_prune_db function" {
+    grep -q 'orca_prune_db()' "${ORCA_REPO_ROOT}/lib/watchclaw-lib.sh"
 }
 
-@test "orca-lib.sh exports orca_get_score function" {
-    grep -q 'orca_get_score()' "${ORCA_REPO_ROOT}/lib/orca-lib.sh"
+@test "watchclaw-lib.sh exports orca_get_score function" {
+    grep -q 'orca_get_score()' "${ORCA_REPO_ROOT}/lib/watchclaw-lib.sh"
 }
 
-@test "orca-lib.sh exports orca_rolling_score function" {
-    grep -q 'orca_rolling_score()' "${ORCA_REPO_ROOT}/lib/orca-lib.sh"
+@test "watchclaw-lib.sh exports orca_rolling_score function" {
+    grep -q 'orca_rolling_score()' "${ORCA_REPO_ROOT}/lib/watchclaw-lib.sh"
 }
 
-@test "orca-lib.sh exports orca_telegram function" {
-    grep -q 'orca_telegram()' "${ORCA_REPO_ROOT}/lib/orca-lib.sh"
+@test "watchclaw-lib.sh exports orca_telegram function" {
+    grep -q 'orca_telegram()' "${ORCA_REPO_ROOT}/lib/watchclaw-lib.sh"
 }
 
-@test "orca-lib.sh defines backward-compat argus aliases" {
-    grep -q 'argus_init()' "${ORCA_REPO_ROOT}/lib/orca-lib.sh"
-    grep -q 'threat_record_event()' "${ORCA_REPO_ROOT}/lib/orca-lib.sh"
-    grep -q 'threat_check_and_ban()' "${ORCA_REPO_ROOT}/lib/orca-lib.sh"
+@test "watchclaw-lib.sh defines backward-compat argus aliases" {
+    grep -q 'argus_init()' "${ORCA_REPO_ROOT}/lib/watchclaw-lib.sh"
+    grep -q 'threat_record_event()' "${ORCA_REPO_ROOT}/lib/watchclaw-lib.sh"
+    grep -q 'threat_check_and_ban()' "${ORCA_REPO_ROOT}/lib/watchclaw-lib.sh"
 }
 
-@test "orca-lib.sh SCORE_MAP includes all required event types" {
-    grep -q 'failed_login' "${ORCA_REPO_ROOT}/lib/orca-lib.sh"
-    grep -q 'login_success' "${ORCA_REPO_ROOT}/lib/orca-lib.sh"
-    grep -q 'command_exec' "${ORCA_REPO_ROOT}/lib/orca-lib.sh"
-    grep -q 'recon_fingerprint' "${ORCA_REPO_ROOT}/lib/orca-lib.sh"
-    grep -q 'tunnel_tcpip' "${ORCA_REPO_ROOT}/lib/orca-lib.sh"
-    grep -q 'persistence_attempt' "${ORCA_REPO_ROOT}/lib/orca-lib.sh"
-    grep -q 'malware_download' "${ORCA_REPO_ROOT}/lib/orca-lib.sh"
+@test "watchclaw-lib.sh SCORE_MAP includes all required event types" {
+    grep -q 'failed_login' "${ORCA_REPO_ROOT}/lib/watchclaw-lib.sh"
+    grep -q 'login_success' "${ORCA_REPO_ROOT}/lib/watchclaw-lib.sh"
+    grep -q 'command_exec' "${ORCA_REPO_ROOT}/lib/watchclaw-lib.sh"
+    grep -q 'recon_fingerprint' "${ORCA_REPO_ROOT}/lib/watchclaw-lib.sh"
+    grep -q 'tunnel_tcpip' "${ORCA_REPO_ROOT}/lib/watchclaw-lib.sh"
+    grep -q 'persistence_attempt' "${ORCA_REPO_ROOT}/lib/watchclaw-lib.sh"
+    grep -q 'malware_download' "${ORCA_REPO_ROOT}/lib/watchclaw-lib.sh"
 }
 
-@test "orca-lib.sh defines DECAY_RATE = 0.10" {
-    grep -q "DECAY_RATE.*0.10" "${ORCA_REPO_ROOT}/lib/orca-lib.sh"
+@test "watchclaw-lib.sh defines DECAY_RATE = 0.10" {
+    grep -q "DECAY_RATE.*0.10" "${ORCA_REPO_ROOT}/lib/watchclaw-lib.sh"
 }
 
-@test "orca-lib.sh defines RECON_CAP_POINTS_30M = 30" {
-    grep -q "RECON_CAP_POINTS_30M.*30" "${ORCA_REPO_ROOT}/lib/orca-lib.sh"
+@test "watchclaw-lib.sh defines RECON_CAP_POINTS_30M = 30" {
+    grep -q "RECON_CAP_POINTS_30M.*30" "${ORCA_REPO_ROOT}/lib/watchclaw-lib.sh"
 }
 
 # ── scripts/ syntax checks ────────────────────────────────────────────────────
@@ -304,8 +304,8 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
-@test "scripts/orca-weekly-report.sh passes bash syntax check" {
-    run bash -n "${ORCA_REPO_ROOT}/scripts/orca-weekly-report.sh"
+@test "scripts/watchclaw-weekly-report.sh passes bash syntax check" {
+    run bash -n "${ORCA_REPO_ROOT}/scripts/watchclaw-weekly-report.sh"
     [ "$status" -eq 0 ]
 }
 

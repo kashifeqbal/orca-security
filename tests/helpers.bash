@@ -1,29 +1,29 @@
 #!/usr/bin/env bash
 # =============================================================================
-# tests/helpers.bash — Shared test helpers for ORCA test suite
+# tests/helpers.bash — Shared test helpers for WatchClaw test suite
 # =============================================================================
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 ORCA_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ORCA_LIB="${ORCA_REPO_ROOT}/lib/orca-lib.sh"
+ORCA_LIB="${ORCA_REPO_ROOT}/lib/watchclaw-lib.sh"
 ORCA_INSTALL="${ORCA_REPO_ROOT}/install.sh"
 ORCA_MODULES_DIR="${ORCA_REPO_ROOT}/modules"
 
 # ── Setup / Teardown ──────────────────────────────────────────────────────────
 
-# Creates a fresh temp ORCA_DIR for each test and sources the library.
+# Creates a fresh temp WATCHCLAW_DIR for each test and sources the library.
 # Call from setup() in each .bats file.
 setup_orca_env() {
     TEST_TMPDIR="$(mktemp -d)"
-    export ORCA_DIR="${TEST_TMPDIR}/.orca"
-    export ORCA_DB="${ORCA_DIR}/threat-db.json"
-    export ORCA_REP_CACHE="${ORCA_DIR}/reputation-cache.json"
-    export ORCA_ASN_DB="${ORCA_DIR}/asn-db.json"
-    export ORCA_GEO_DB="${ORCA_DIR}/geo-db.json"
-    export ORCA_STATE="${ORCA_DIR}/orca-state.json"
-    export ORCA_LOG="${ORCA_DIR}/orca.log"
+    export WATCHCLAW_DIR="${TEST_TMPDIR}/.watchclaw"
+    export WATCHCLAW_DB="${WATCHCLAW_DIR}/threat-db.json"
+    export ORCA_REP_CACHE="${WATCHCLAW_DIR}/reputation-cache.json"
+    export ORCA_ASN_DB="${WATCHCLAW_DIR}/asn-db.json"
+    export ORCA_GEO_DB="${WATCHCLAW_DIR}/geo-db.json"
+    export WATCHCLAW_STATE="${WATCHCLAW_DIR}/watchclaw-state.json"
+    export WATCHCLAW_LOG="${WATCHCLAW_DIR}/watchclaw.log"
 
-    mkdir -p "${ORCA_DIR}"
+    mkdir -p "${WATCHCLAW_DIR}"
 
     # Suppress network calls
     export ABUSEIPDB_API_KEY=""
@@ -35,7 +35,7 @@ setup_orca_env() {
     source "${ORCA_LIB}"
 
     # Initialize state files
-    orca_init
+    watchclaw_init
 }
 
 # Removes temp directory. Call from teardown() in each .bats file.
@@ -50,14 +50,14 @@ teardown_orca_env() {
 # Returns the raw score for an IP from the threat DB.
 db_score() {
     local ip="$1"
-    jq -r --arg ip "$ip" '.[$ip].score // 0' "${ORCA_DB}"
+    jq -r --arg ip "$ip" '.[$ip].score // 0' "${WATCHCLAW_DB}"
 }
 
 # Returns the event-type count for an IP.
 db_event_count() {
     local ip="$1"
     local event_type="$2"
-    jq -r --arg ip "$ip" --arg et "$event_type" '.[$ip].event_types[$et] // 0' "${ORCA_DB}"
+    jq -r --arg ip "$ip" --arg et "$event_type" '.[$ip].event_types[$et] // 0' "${WATCHCLAW_DB}"
 }
 
 # Returns the most recent active ban type for an IP (none|short|long|permanent).
@@ -67,14 +67,14 @@ db_active_ban() {
       .[$ip].bans // [] |
       map(select(.active == true)) |
       sort_by(.at) | last | .type // "none"
-    ' "${ORCA_DB}"
+    ' "${WATCHCLAW_DB}"
 }
 
-# Injects a pre-built record directly into the threat DB (bypasses orca_record_event).
+# Injects a pre-built record directly into the threat DB (bypasses watchclaw_record_event).
 db_inject() {
     local ip="$1"
     local json="$2"
-    python3 - "${ORCA_DB}" "${ip}" "${json}" <<'PYEOF'
+    python3 - "${WATCHCLAW_DB}" "${ip}" "${json}" <<'PYEOF'
 import sys, json, os
 db_path, ip, rec_str = sys.argv[1], sys.argv[2], sys.argv[3]
 try:
@@ -91,7 +91,7 @@ PYEOF
 db_set_last_seen_hours_ago() {
     local ip="$1"
     local hours="$2"
-    python3 - "${ORCA_DB}" "${ip}" "${hours}" <<'PYEOF'
+    python3 - "${WATCHCLAW_DB}" "${ip}" "${hours}" <<'PYEOF'
 import sys, json, os, datetime
 db_path, ip, hours_s = sys.argv[1], sys.argv[2], sys.argv[3]
 hours = float(hours_s)

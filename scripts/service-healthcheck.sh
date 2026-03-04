@@ -12,7 +12,7 @@ CRON_SOURCE="/root/.openclaw/workspace/config/cron-jobs-source.json"
 CRON_BACKUP="/root/.openclaw/workspace/config/cron-jobs-backup.json"
 CRON_LIVE="/root/.openclaw/cron/jobs.json"
 CRON_AUDIT="/root/.openclaw/workspace/scripts/cron-channel-audit.sh"
-ORCA_STATE="/root/.orca/orca-state.json"
+WATCHCLAW_STATE="/root/.watchclaw/watchclaw-state.json"
 
 mkdir -p "$(dirname "$LOG")"
 TS=$(date '+%Y-%m-%d %H:%M:%S')
@@ -28,14 +28,14 @@ alert() {
 
 log() { echo "[$TS] $1" >> "$LOG"; }
 
-# ── 0. ORCA preflight (fail fast on script warnings/errors) ─────────────────
-PREFLIGHT_SCRIPT="$(dirname "$0")/orca-preflight.sh"
+# ── 0. WatchClaw preflight (fail fast on script warnings/errors) ─────────────────
+PREFLIGHT_SCRIPT="$(dirname "$0")/watchclaw-preflight.sh"
 if [ -x "$PREFLIGHT_SCRIPT" ]; then
   PREFLIGHT_OUT=$("$PREFLIGHT_SCRIPT" 2>/dev/null || true)
   if echo "$PREFLIGHT_OUT" | grep -q '"status":"failed"'; then
-    ISSUES+=("ORCA preflight failed (script parser warnings/errors)")
+    ISSUES+=("WatchClaw preflight failed (script parser warnings/errors)")
     log "ISSUE: preflight failed payload=${PREFLIGHT_OUT}"
-    MSG="🚨 *Ops Alert — $(date '+%Y-%m-%d %H:%M')*\n\n❌ ORCA preflight failed (script parser warnings/errors).\nCheck: /root/.openclaw/workspace/agents/ops/scripts/orca-preflight.sh"
+    MSG="🚨 *Ops Alert — $(date '+%Y-%m-%d %H:%M')*\n\n❌ WatchClaw preflight failed (script parser warnings/errors).\nCheck: /root/.openclaw/workspace/agents/ops/scripts/watchclaw-preflight.sh"
     alert "$MSG"
     exit 0
   fi
@@ -170,8 +170,8 @@ if [ -x "$POSTURE_SCRIPT" ]; then
   POSTURE_SEVERITY=$(echo "$POSTURE_OUTPUT" | grep '^SECURITY STATUS:' | awk '{print $3}')
   if [ "$POSTURE_SEVERITY" = "CRITICAL" ]; then
     SUPPRESS_CRIT_ALERT="0"
-    if [ -f "$ORCA_STATE" ]; then
-      SUPPRESS_CRIT_ALERT=$(python3 - "$ORCA_STATE" <<'PYEOF' 2>/dev/null || echo "0"
+    if [ -f "$WATCHCLAW_STATE" ]; then
+      SUPPRESS_CRIT_ALERT=$(python3 - "$WATCHCLAW_STATE" <<'PYEOF' 2>/dev/null || echo "0"
 import sys, json, datetime
 p = sys.argv[1]
 try:
@@ -194,7 +194,7 @@ PYEOF
     fi
 
     if [ "$SUPPRESS_CRIT_ALERT" = "1" ]; then
-      log "Posture CRITICAL alert suppressed (already sent within 10m by ORCA)"
+      log "Posture CRITICAL alert suppressed (already sent within 10m by WatchClaw)"
     else
       ISSUES+=("🔴 Security posture CRITICAL — see security-posture.log")
     fi

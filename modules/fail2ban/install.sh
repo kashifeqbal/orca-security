@@ -4,9 +4,9 @@
 # =============================================================================
 
 set -euo pipefail
-source /etc/orca/orca.conf 2>/dev/null || true
+source /etc/watchclaw/watchclaw.conf 2>/dev/null || true
 
-log()  { echo -e "\033[0;32m[ORCA:fail2ban]\033[0m $*"; }
+log()  { echo -e "\033[0;32m[WatchClaw:fail2ban]\033[0m $*"; }
 
 # Install fail2ban if missing
 if ! command -v fail2ban-client &>/dev/null; then

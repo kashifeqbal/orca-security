@@ -7,12 +7,12 @@
 # =============================================================================
 
 set -euo pipefail
-source /etc/orca/orca.conf 2>/dev/null || true
+source /etc/watchclaw/watchclaw.conf 2>/dev/null || true
 
-ORCA_STATE="${ORCA_STATE_DIR:-/var/lib/orca}"
-SYNC_DIR="${ORCA_STATE}/sync"
+WATCHCLAW_STATE="${WATCHCLAW_STATE_DIR:-/var/lib/watchclaw}"
+SYNC_DIR="${WATCHCLAW_STATE}/sync"
 
-log()  { echo -e "\033[0;32m[ORCA:sync]\033[0m $*"; }
+log()  { echo -e "\033[0;32m[WatchClaw:sync]\033[0m $*"; }
 
 mkdir -p "$SYNC_DIR"
 
@@ -22,16 +22,16 @@ if [ -z "${SYNC_NODE_ID:-}" ]; then
     log "Generated node ID: $SYNC_NODE_ID"
 fi
 
-cat > /opt/orca/scripts/orca-sync.sh << 'SYNCEOF'
+cat > /opt/watchclaw/scripts/watchclaw-sync.sh << 'SYNCEOF'
 #!/bin/bash
 # Cross-node threat DB sync
 set -euo pipefail
-source /etc/orca/orca.conf 2>/dev/null || true
+source /etc/watchclaw/watchclaw.conf 2>/dev/null || true
 
-ORCA_STATE="${ORCA_STATE_DIR:-/var/lib/orca}"
-ORCA_DB="${ORCA_DIR:-/var/lib/orca}/threat-db.json"
-SYNC_DIR="${ORCA_STATE}/sync"
-SYNC_LOG="/var/log/orca/sync.log"
+WATCHCLAW_STATE="${WATCHCLAW_STATE_DIR:-/var/lib/watchclaw}"
+WATCHCLAW_DB="${WATCHCLAW_DIR:-/var/lib/watchclaw}/threat-db.json"
+SYNC_DIR="${WATCHCLAW_STATE}/sync"
+SYNC_LOG="/var/log/watchclaw/sync.log"
 NODE_ID="${SYNC_NODE_ID:-$(hostname -s)}"
 UFW="/usr/sbin/ufw"
 
@@ -40,7 +40,7 @@ log()  { echo "[$(date -Iseconds)] $*" | tee -a "$SYNC_LOG"; }
 case "${1:-auto}" in
     push)
         # Export this node's high-confidence bans
-        python3 - "$ORCA_DB" "$SYNC_DIR" "$NODE_ID" << 'PYEOF'
+        python3 - "$WATCHCLAW_DB" "$SYNC_DIR" "$NODE_ID" << 'PYEOF'
 import sys, json, datetime
 
 db_path, sync_dir, node_id = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -88,7 +88,7 @@ PYEOF
             cd "$SYNC_GIT"
             git add -A
             git diff --cached --quiet || {
-                git commit -m "ORCA sync: ${NODE_ID} $(date -Iseconds)"
+                git commit -m "WatchClaw sync: ${NODE_ID} $(date -Iseconds)"
                 git push origin "${SYNC_BRANCH:-main}"
             }
             log "Pushed to sync repo"
@@ -117,7 +117,7 @@ PYEOF
             while IFS= read -r ip; do
                 [ -z "$ip" ] && continue
                 if ! $UFW status | grep -qF "$ip"; then
-                    $UFW deny from "$ip" to any comment "orca-sync-import" 2>/dev/null || true
+                    $UFW deny from "$ip" to any comment "watchclaw-sync-import" 2>/dev/null || true
                     fail2ban-client set sshd banip "$ip" 2>/dev/null || true
                     IMPORTED=$((IMPORTED + 1))
                 fi
@@ -140,10 +140,10 @@ except: pass
         ;;
 
     *)
-        echo "Usage: orca sync [push|pull|auto]"
+        echo "Usage: watchclaw sync [push|pull|auto]"
         ;;
 esac
 SYNCEOF
-chmod +x /opt/orca/scripts/orca-sync.sh
+chmod +x /opt/watchclaw/scripts/watchclaw-sync.sh
 
 log "✅ Cross-node sync module installed (node: ${SYNC_NODE_ID})"

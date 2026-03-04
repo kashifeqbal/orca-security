@@ -1,42 +1,42 @@
 #!/bin/bash
 # =============================================================================
-# ORCA Installer — One-command security hardening for Linux servers
+# WatchClaw Installer — One-command security hardening for Linux servers
 # =============================================================================
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/kashifeqbal/orca-security/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/kashifeqbal/watchclaw/main/install.sh | bash
 #   # or
-#   git clone https://github.com/kashifeqbal/orca-security.git && cd orca-security && sudo ./install.sh
+#   git clone https://github.com/kashifeqbal/watchclaw.git && cd watchclaw && sudo ./install.sh
 #
 # Options:
 #   --standalone      Skip OpenClaw agent integration
 #   --with-agents     Include OpenClaw agent integration
 #   --modules=LIST    Comma-separated modules (default: all)
 #   --dry-run         Show what would be done without doing it
-#   --uninstall       Remove ORCA (keeps threat DB)
+#   --uninstall       Remove WatchClaw (keeps threat DB)
 # =============================================================================
 
 set -euo pipefail
 
-ORCA_VERSION="1.0.0"
-ORCA_REPO="https://github.com/kashifeqbal/orca-security.git"
-ORCA_INSTALL_DIR="/opt/orca"
-ORCA_STATE_DIR="/var/lib/orca"
-ORCA_LOG_DIR="/var/log/orca"
-ORCA_BIN="/usr/local/bin/orca"
-ORCA_CONF="/etc/orca/orca.conf"
+WATCHCLAW_VERSION="1.0.0"
+WATCHCLAW_REPO="https://github.com/kashifeqbal/watchclaw.git"
+WATCHCLAW_INSTALL_DIR="/opt/watchclaw"
+WATCHCLAW_STATE_DIR="/var/lib/watchclaw"
+WATCHCLAW_LOG_DIR="/var/log/watchclaw"
+WATCHCLAW_BIN="/usr/local/bin/watchclaw"
+WATCHCLAW_CONF="/etc/watchclaw/watchclaw.conf"
 
 # ── Colors ────────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'
 BLUE='\033[0;34m'; CYAN='\033[0;36m'; NC='\033[0m'; BOLD='\033[1m'
 
-log()  { echo -e "${GREEN}[ORCA]${NC} $*"; }
+log()  { echo -e "${GREEN}[WatchClaw]${NC} $*"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
 err()  { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 banner() {
     echo -e "${CYAN}${BOLD}"
     cat << 'EOF'
 
-     ██████╗ ██████╗  ██████╗ █████╗
+     ██╗    ██╗ █████╗ ████████╗ ██████╗██╗  ██╗ ██████╗██╗      █████╗ ██╗    ██╗
     ██╔═══██╗██╔══██╗██╔════╝██╔══██╗
     ██║   ██║██████╔╝██║     ███████║
     ██║   ██║██╔══██╗██║     ██╔══██║
@@ -46,7 +46,7 @@ banner() {
     Open Runtime Containment & Analysis
 EOF
     echo -e "${NC}"
-    echo -e "    Version ${ORCA_VERSION}"
+    echo -e "    Version ${WATCHCLAW_VERSION}"
     echo ""
 }
 
@@ -77,12 +77,12 @@ done
 # ── Pre-flight checks ────────────────────────────────────────────────────────
 preflight() {
     if [ "$(id -u)" -ne 0 ]; then
-        err "ORCA must be run as root"
+        err "WatchClaw must be run as root"
         exit 1
     fi
 
     if [ ! -f /etc/os-release ]; then
-        err "Cannot detect OS. ORCA requires Debian/Ubuntu or RHEL/Rocky."
+        err "Cannot detect OS. WatchClaw requires Debian/Ubuntu or RHEL/Rocky."
         exit 1
     fi
 
@@ -90,7 +90,7 @@ preflight() {
     case "$ID" in
         ubuntu|debian) PKG_MGR="apt" ;;
         centos|rhel|rocky|alma|fedora) PKG_MGR="dnf" ;;
-        *) err "Unsupported OS: $ID. ORCA supports Debian/Ubuntu and RHEL/Rocky."; exit 1 ;;
+        *) err "Unsupported OS: $ID. WatchClaw supports Debian/Ubuntu and RHEL/Rocky."; exit 1 ;;
     esac
 
     # Check Python 3
@@ -113,33 +113,33 @@ setup_dirs() {
     log "Creating directories..."
     $DRY_RUN && return 0
 
-    mkdir -p "$ORCA_INSTALL_DIR" "$ORCA_STATE_DIR" "$ORCA_LOG_DIR" /etc/orca
-    mkdir -p "$ORCA_STATE_DIR"/{export,sync,canary}
+    mkdir -p "$WATCHCLAW_INSTALL_DIR" "$WATCHCLAW_STATE_DIR" "$WATCHCLAW_LOG_DIR" /etc/watchclaw
+    mkdir -p "$WATCHCLAW_STATE_DIR"/{export,sync,canary}
 
     # Copy files if running from cloned repo
-    if [ -f "$(dirname "$0")/lib/orca-lib.sh" ]; then
-        cp -r "$(dirname "$0")"/{lib,modules,scripts,config} "$ORCA_INSTALL_DIR/"
+    if [ -f "$(dirname "$0")/lib/watchclaw-lib.sh" ]; then
+        cp -r "$(dirname "$0")"/{lib,modules,scripts,config} "$WATCHCLAW_INSTALL_DIR/"
     fi
 }
 
 # ── Load config ───────────────────────────────────────────────────────────────
 load_config() {
-    if [ -f "$ORCA_CONF" ]; then
-        source "$ORCA_CONF"
-    elif [ -f "config/orca.conf" ]; then
-        source "config/orca.conf"
-        cp "config/orca.conf" "$ORCA_CONF"
-    elif [ -f "config/orca.conf.example" ]; then
-        cp "config/orca.conf.example" "$ORCA_CONF"
-        warn "Using example config. Edit /etc/orca/orca.conf for your setup."
-        source "$ORCA_CONF"
+    if [ -f "$WATCHCLAW_CONF" ]; then
+        source "$WATCHCLAW_CONF"
+    elif [ -f "config/watchclaw.conf" ]; then
+        source "config/watchclaw.conf"
+        cp "config/watchclaw.conf" "$WATCHCLAW_CONF"
+    elif [ -f "config/watchclaw.conf.example" ]; then
+        cp "config/watchclaw.conf.example" "$WATCHCLAW_CONF"
+        warn "Using example config. Edit /etc/watchclaw/watchclaw.conf for your setup."
+        source "$WATCHCLAW_CONF"
     fi
 }
 
 # ── Module runner ─────────────────────────────────────────────────────────────
 run_module() {
     local mod="$1"
-    local mod_script="${ORCA_INSTALL_DIR}/modules/${mod}/install.sh"
+    local mod_script="${WATCHCLAW_INSTALL_DIR}/modules/${mod}/install.sh"
 
     if [ ! -f "$mod_script" ]; then
         # Try local path (running from repo)
@@ -161,42 +161,42 @@ run_module() {
 
 # ── Install CLI ───────────────────────────────────────────────────────────────
 install_cli() {
-    log "Installing ORCA CLI..."
+    log "Installing WatchClaw CLI..."
     $DRY_RUN && return 0
 
-    cat > "$ORCA_BIN" << 'CLIEOF'
+    cat > "$WATCHCLAW_BIN" << 'CLIEOF'
 #!/bin/bash
-# ORCA CLI — wrapper for orca commands
+# WatchClaw CLI — wrapper for watchclaw commands
 set -euo pipefail
 
-ORCA_DIR="/opt/orca"
-ORCA_STATE="/var/lib/orca"
-ORCA_CONF="/etc/orca/orca.conf"
+WATCHCLAW_DIR="/opt/watchclaw"
+WATCHCLAW_STATE="/var/lib/watchclaw"
+WATCHCLAW_CONF="/etc/watchclaw/watchclaw.conf"
 
-[ -f "$ORCA_CONF" ] && source "$ORCA_CONF"
-source "${ORCA_DIR}/lib/orca-lib.sh" 2>/dev/null || true
+[ -f "$WATCHCLAW_CONF" ] && source "$WATCHCLAW_CONF"
+source "${WATCHCLAW_DIR}/lib/watchclaw-lib.sh" 2>/dev/null || true
 
 case "${1:-help}" in
-    status)     bash "${ORCA_DIR}/scripts/security-posture.sh" ;;
-    report)     bash "${ORCA_DIR}/scripts/security-posture.sh" --full ;;
-    threats)    bash "${ORCA_DIR}/scripts/orca-threats.sh" ;;
-    ban)        shift; bash "${ORCA_DIR}/scripts/orca-ban.sh" "$@" ;;
-    unban)      shift; bash "${ORCA_DIR}/scripts/orca-unban.sh" "$@" ;;
-    export)     shift; bash "${ORCA_DIR}/scripts/orca-export.sh" "$@" ;;
-    import)     shift; bash "${ORCA_DIR}/scripts/orca-import.sh" "$@" ;;
-    sync)       shift; bash "${ORCA_DIR}/scripts/orca-sync.sh" "$@" ;;
-    selftest)   bash "${ORCA_DIR}/scripts/orca-selftest.sh" ;;
+    status)     bash "${WATCHCLAW_DIR}/scripts/security-posture.sh" ;;
+    report)     bash "${WATCHCLAW_DIR}/scripts/security-posture.sh" --full ;;
+    threats)    bash "${WATCHCLAW_DIR}/scripts/watchclaw-threats.sh" ;;
+    ban)        shift; bash "${WATCHCLAW_DIR}/scripts/watchclaw-ban.sh" "$@" ;;
+    unban)      shift; bash "${WATCHCLAW_DIR}/scripts/watchclaw-unban.sh" "$@" ;;
+    export)     shift; bash "${WATCHCLAW_DIR}/scripts/watchclaw-export.sh" "$@" ;;
+    import)     shift; bash "${WATCHCLAW_DIR}/scripts/watchclaw-import.sh" "$@" ;;
+    sync)       shift; bash "${WATCHCLAW_DIR}/scripts/watchclaw-sync.sh" "$@" ;;
+    selftest)   bash "${WATCHCLAW_DIR}/scripts/watchclaw-selftest.sh" ;;
     module)
         shift
         case "${1:-list}" in
-            list)    ls "${ORCA_DIR}/modules/" 2>/dev/null || echo "No modules" ;;
-            enable)  shift; bash "${ORCA_DIR}/modules/$1/install.sh" ;;
-            disable) shift; bash "${ORCA_DIR}/modules/$1/uninstall.sh" 2>/dev/null || echo "No uninstall for $1" ;;
+            list)    ls "${WATCHCLAW_DIR}/modules/" 2>/dev/null || echo "No modules" ;;
+            enable)  shift; bash "${WATCHCLAW_DIR}/modules/$1/install.sh" ;;
+            disable) shift; bash "${WATCHCLAW_DIR}/modules/$1/uninstall.sh" 2>/dev/null || echo "No uninstall for $1" ;;
         esac
         ;;
-    version)    echo "ORCA v$(cat ${ORCA_DIR}/VERSION 2>/dev/null || echo unknown)" ;;
+    version)    echo "WatchClaw v$(cat ${WATCHCLAW_DIR}/VERSION 2>/dev/null || echo unknown)" ;;
     help|--help|-h)
-        echo "ORCA — Open Runtime Containment & Analysis"
+        echo "WatchClaw — Open Runtime Containment & Analysis"
         echo ""
         echo "Commands:"
         echo "  status          Security posture summary"
@@ -213,11 +213,11 @@ case "${1:-help}" in
         echo "  selftest        Run all checks"
         echo "  version         Show version"
         ;;
-    *) echo "Unknown command: $1. Run 'orca help' for usage." ;;
+    *) echo "Unknown command: $1. Run 'watchclaw help' for usage." ;;
 esac
 CLIEOF
-    chmod +x "$ORCA_BIN"
-    echo "$ORCA_VERSION" > "${ORCA_INSTALL_DIR}/VERSION"
+    chmod +x "$WATCHCLAW_BIN"
+    echo "$WATCHCLAW_VERSION" > "${WATCHCLAW_INSTALL_DIR}/VERSION"
 }
 
 # ── Install crons ─────────────────────────────────────────────────────────────
@@ -225,26 +225,26 @@ install_crons() {
     log "Installing cron schedules..."
     $DRY_RUN && return 0
 
-    local cron_file="/etc/cron.d/orca"
+    local cron_file="/etc/cron.d/watchclaw"
     cat > "$cron_file" << EOF
-# ORCA Security — automated monitoring
+# WatchClaw Security — automated monitoring
 SHELL=/bin/bash
 PATH=/usr/local/bin:/usr/bin:/bin
-ORCA_CONF=/etc/orca/orca.conf
+WATCHCLAW_CONF=/etc/watchclaw/watchclaw.conf
 
-${CRON_NOTIFY_INTERVAL:-*/15 * * * *}     root ${ORCA_INSTALL_DIR}/scripts/cowrie-notify.sh >> ${ORCA_LOG_DIR}/notify.log 2>&1
-${CRON_AUTOBAN_INTERVAL:-*/15 * * * *}    root ${ORCA_INSTALL_DIR}/scripts/cowrie-autoban.sh >> ${ORCA_LOG_DIR}/autoban.log 2>&1
-${CRON_POSTURE_INTERVAL:-*/30 * * * *}    root ${ORCA_INSTALL_DIR}/scripts/security-posture.sh >> ${ORCA_LOG_DIR}/posture.log 2>&1
-${CRON_HEALTHCHECK_INTERVAL:-*/30 * * * *} root ${ORCA_INSTALL_DIR}/scripts/service-healthcheck.sh >> ${ORCA_LOG_DIR}/health.log 2>&1
-${CRON_WEEKLY_REPORT:-0 9 * * 1}          root ${ORCA_INSTALL_DIR}/scripts/orca-weekly-report.sh >> ${ORCA_LOG_DIR}/weekly.log 2>&1
+${CRON_NOTIFY_INTERVAL:-*/15 * * * *}     root ${WATCHCLAW_INSTALL_DIR}/scripts/cowrie-notify.sh >> ${WATCHCLAW_LOG_DIR}/notify.log 2>&1
+${CRON_AUTOBAN_INTERVAL:-*/15 * * * *}    root ${WATCHCLAW_INSTALL_DIR}/scripts/cowrie-autoban.sh >> ${WATCHCLAW_LOG_DIR}/autoban.log 2>&1
+${CRON_POSTURE_INTERVAL:-*/30 * * * *}    root ${WATCHCLAW_INSTALL_DIR}/scripts/security-posture.sh >> ${WATCHCLAW_LOG_DIR}/posture.log 2>&1
+${CRON_HEALTHCHECK_INTERVAL:-*/30 * * * *} root ${WATCHCLAW_INSTALL_DIR}/scripts/service-healthcheck.sh >> ${WATCHCLAW_LOG_DIR}/health.log 2>&1
+${CRON_WEEKLY_REPORT:-0 9 * * 1}          root ${WATCHCLAW_INSTALL_DIR}/scripts/watchclaw-weekly-report.sh >> ${WATCHCLAW_LOG_DIR}/weekly.log 2>&1
 EOF
 
     if [ "${THREAT_FEEDS:-}" ]; then
-        echo "${CRON_FEED_IMPORT:-0 */6 * * *}      root ${ORCA_INSTALL_DIR}/scripts/orca-import.sh >> ${ORCA_LOG_DIR}/import.log 2>&1" >> "$cron_file"
+        echo "${CRON_FEED_IMPORT:-0 */6 * * *}      root ${WATCHCLAW_INSTALL_DIR}/scripts/watchclaw-import.sh >> ${WATCHCLAW_LOG_DIR}/import.log 2>&1" >> "$cron_file"
     fi
 
     if [ "${SYNC_ENABLE:-false}" = "true" ]; then
-        echo "${CRON_SYNC:-*/15 * * * *}             root ${ORCA_INSTALL_DIR}/scripts/orca-sync.sh >> ${ORCA_LOG_DIR}/sync.log 2>&1" >> "$cron_file"
+        echo "${CRON_SYNC:-*/15 * * * *}             root ${WATCHCLAW_INSTALL_DIR}/scripts/watchclaw-sync.sh >> ${WATCHCLAW_LOG_DIR}/sync.log 2>&1" >> "$cron_file"
     fi
 
     chmod 644 "$cron_file"
@@ -280,15 +280,15 @@ main() {
     install_crons
 
     echo ""
-    log "${BOLD}${GREEN}✅ ORCA installed successfully!${NC}"
+    log "${BOLD}${GREEN}✅ WatchClaw installed successfully!${NC}"
     echo ""
-    echo -e "  ${CYAN}orca status${NC}     — check security posture"
-    echo -e "  ${CYAN}orca selftest${NC}   — verify everything works"
-    echo -e "  ${CYAN}orca help${NC}       — all commands"
+    echo -e "  ${CYAN}watchclaw status${NC}     — check security posture"
+    echo -e "  ${CYAN}watchclaw selftest${NC}   — verify everything works"
+    echo -e "  ${CYAN}watchclaw help${NC}       — all commands"
     echo ""
 
     if [ -z "${ALERT_TELEGRAM_TOKEN:-}" ] && [ -z "${ALERT_DISCORD_WEBHOOK:-}" ] && [ -z "${ALERT_SLACK_WEBHOOK:-}" ]; then
-        warn "No alert channel configured. Edit /etc/orca/orca.conf to add Telegram/Discord/Slack."
+        warn "No alert channel configured. Edit /etc/watchclaw/watchclaw.conf to add Telegram/Discord/Slack."
     fi
 }
 

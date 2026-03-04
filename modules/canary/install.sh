@@ -2,17 +2,17 @@
 # =============================================================================
 # Module: canary — Tripwire canary tokens
 # =============================================================================
-# Creates fake sensitive files. If anyone reads/modifies them, ORCA alerts.
+# Creates fake sensitive files. If anyone reads/modifies them, WatchClaw alerts.
 # These are files an attacker would look for: SSH keys, wallet, .env, etc.
 # =============================================================================
 
 set -euo pipefail
-source /etc/orca/orca.conf 2>/dev/null || true
+source /etc/watchclaw/watchclaw.conf 2>/dev/null || true
 
-CANARY_STATE="/var/lib/orca/canary"
-CANARY_LOG="/var/log/orca/canary.log"
+CANARY_STATE="/var/lib/watchclaw/canary"
+CANARY_LOG="/var/log/watchclaw/canary.log"
 
-log()  { echo -e "\033[0;32m[ORCA:canary]\033[0m $*"; }
+log()  { echo -e "\033[0;32m[WatchClaw:canary]\033[0m $*"; }
 
 mkdir -p "$CANARY_STATE"
 
@@ -38,7 +38,7 @@ create_canary() {
             cat > "$path" << 'CANARY'
 -----BEGIN OPENSSH PRIVATE KEY-----
 b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
-ORCA-CANARY-TOKEN-DO-NOT-USE
+WatchClaw-CANARY-TOKEN-DO-NOT-USE
 QyNTUxOQAAACCUkTc5RqHOxGzMaOAaHG7dCMORCA0CANARY0TOKEN00000000
 -----END OPENSSH PRIVATE KEY-----
 CANARY
@@ -49,7 +49,7 @@ CANARY
         *.env*)
             cat > "$path" << 'CANARY'
 DATABASE_URL=postgres://admin:orca_canary_not_real@db.internal:5432/prod
-AWS_SECRET_ACCESS_KEY=ORCA/CANARY/TOKEN/NOT/REAL/KEY
+AWS_SECRET_ACCESS_KEY=WatchClaw/CANARY/TOKEN/NOT/REAL/KEY
 STRIPE_SECRET_KEY=sk_live_orca_canary_not_real_key
 CANARY
             ;;
@@ -57,11 +57,11 @@ CANARY
             cat > "$path" << 'CANARY'
 [default]
 aws_access_key_id = AKIAORCA0CANARY0TOKEN
-aws_secret_access_key = ORCA/CANARY/NOT/REAL/wJalrXUtnFEMI
+aws_secret_access_key = WatchClaw/CANARY/NOT/REAL/wJalrXUtnFEMI
 CANARY
             ;;
         *shadow*)
-            echo 'root:$6$orca.canary$NOT.A.REAL.HASH.THIS.IS.A.CANARY.TOKEN:19000:0:99999:7:::' > "$path"
+            echo 'root:$6$watchclaw.canary$NOT.A.REAL.HASH.THIS.IS.A.CANARY.TOKEN:19000:0:99999:7:::' > "$path"
             ;;
         *)
             echo "ORCA_CANARY_TOKEN=$(date +%s)" > "$path"
@@ -79,14 +79,14 @@ CANARY
 }
 
 # Create monitoring script
-cat > /opt/orca/scripts/canary-check.sh << 'CHECKEOF'
+cat > /opt/watchclaw/scripts/canary-check.sh << 'CHECKEOF'
 #!/bin/bash
 # Canary token checker — runs via cron
 set -euo pipefail
-source /etc/orca/orca.conf 2>/dev/null || true
-CANARY_STATE="/var/lib/orca/canary"
-CANARY_LOG="/var/log/orca/canary.log"
-ALERT_FUNC="/opt/orca/lib/orca-alert.sh"
+source /etc/watchclaw/watchclaw.conf 2>/dev/null || true
+CANARY_STATE="/var/lib/watchclaw/canary"
+CANARY_LOG="/var/log/watchclaw/canary.log"
+ALERT_FUNC="/opt/watchclaw/lib/watchclaw-alert.sh"
 [ -f "$ALERT_FUNC" ] && source "$ALERT_FUNC"
 
 [ ! -f "${CANARY_STATE}/checksums" ] && exit 0
@@ -120,13 +120,13 @@ if [ ${#TRIGGERED[@]} -gt 0 ]; then
     MSG="${MSG}\nInvestigate immediately."
     echo -e "$MSG" >> "$CANARY_LOG"
     # Send alert
-    if type orca_alert &>/dev/null; then
-        orca_alert "$MSG"
+    if type watchclaw_alert &>/dev/null; then
+        watchclaw_alert "$MSG"
     fi
     echo -e "$MSG"
 fi
 CHECKEOF
-chmod +x /opt/orca/scripts/canary-check.sh
+chmod +x /opt/watchclaw/scripts/canary-check.sh
 
 # Plant canaries
 > "${CANARY_STATE}/checksums"  # Reset
@@ -137,9 +137,9 @@ for path in "${CANARY_PATHS[@]}"; do
 done
 
 # Add to cron
-if [ -f /etc/cron.d/orca ]; then
-    grep -q "canary-check" /etc/cron.d/orca || \
-        echo "*/5 * * * *  root /opt/orca/scripts/canary-check.sh >> /var/log/orca/canary.log 2>&1" >> /etc/cron.d/orca
+if [ -f /etc/cron.d/watchclaw ]; then
+    grep -q "canary-check" /etc/cron.d/watchclaw || \
+        echo "*/5 * * * *  root /opt/watchclaw/scripts/canary-check.sh >> /var/log/watchclaw/canary.log 2>&1" >> /etc/cron.d/watchclaw
 fi
 
 log "✅ Canary tokens planted (${#CANARY_PATHS[@]} files). Checked every 5 minutes."

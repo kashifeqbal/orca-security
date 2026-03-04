@@ -1,13 +1,13 @@
 # =============================================================================
-# ORCA Configuration
+# WatchClaw Configuration
 # =============================================================================
-# Copy to orca.conf and customize for your machine.
+# Copy to watchclaw.conf and customize for your machine.
 # All values have sane defaults — only set what you need to change.
 # =============================================================================
 
 # ── General ──────────────────────────────────────────────────────────────────
-# ORCA_DIR="/var/lib/orca"            # State directory (threat-db, logs, etc.)
-# ORCA_LOG="/var/log/orca/orca.log"   # Main log file
+# WATCHCLAW_DIR="/var/lib/watchclaw"            # State directory (threat-db, logs, etc.)
+# WATCHCLAW_LOG="/var/log/watchclaw/watchclaw.log"   # Main log file
 
 # ── SSH Hardening ────────────────────────────────────────────────────────────
 SSH_PORT=2222                          # Real SSH port (moved from 22)
@@ -95,8 +95,8 @@ THREAT_FEED_REFRESH=86400              # Seconds between feed refreshes (default
 # ── Threat Feed Export ───────────────────────────────────────────────────────
 EXPORT_ENABLE=false
 EXPORT_FORMAT="json"                   # json, plaintext, both
-EXPORT_PATH="/var/lib/orca/export"     # Local export directory
-EXPORT_GITHUB_REPO=""                  # e.g., "kashifeqbal/orca-threats"
+EXPORT_PATH="/var/lib/watchclaw/export"     # Local export directory
+EXPORT_GITHUB_REPO=""                  # e.g., "kashifeqbal/watchclaw-threats"
 EXPORT_GITHUB_BRANCH="main"
 EXPORT_MIN_SCORE=25                    # Only export IPs above this score
 

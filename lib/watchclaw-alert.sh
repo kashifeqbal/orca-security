@@ -1,11 +1,11 @@
 #!/bin/bash
 # =============================================================================
-# ORCA Alert Library — multi-channel alert dispatcher
+# WatchClaw Alert Library — multi-channel alert dispatcher
 # =============================================================================
 
-source /etc/orca/orca.conf 2>/dev/null || true
+source /etc/watchclaw/watchclaw.conf 2>/dev/null || true
 
-orca_alert() {
+watchclaw_alert() {
     local msg="$1"
     local priority="${2:-normal}"  # normal, critical
 
@@ -41,7 +41,7 @@ orca_alert() {
         json=$(python3 -c "
 import json, datetime
 print(json.dumps({
-    'source': 'orca',
+    'source': 'watchclaw',
     'priority': '$priority',
     'timestamp': datetime.datetime.utcnow().isoformat() + 'Z',
     'message': '''$msg'''
