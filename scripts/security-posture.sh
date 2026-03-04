@@ -354,7 +354,7 @@ PYEOF
 fi
 
 # ── WatchClaw enrichment: ASN clusters + geo anomalies + rep risks ─────────────────
-ORCA_ENRICH=$(python3 - "$ORCA_ASN_DB" "$ORCA_GEO_DB" "$ORCA_REP_CACHE" "$WATCHCLAW_DB" <<'PYEOF' 2>/dev/null || echo ""
+WATCHCLAW_ENRICH=$(python3 - "$ORCA_ASN_DB" "$ORCA_GEO_DB" "$ORCA_REP_CACHE" "$WATCHCLAW_DB" <<'PYEOF' 2>/dev/null || echo ""
 import sys, json, datetime
 
 asn_db_path, geo_db_path, rep_cache_path, db_path = sys.argv[1:]
@@ -408,13 +408,13 @@ print(f"CLUSTER_COUNT={len(clusters)}")
 PYEOF
 )
 
-ORCA_CLUSTERS=$(echo "$ORCA_ENRICH"   | grep '^CLUSTERS=' | cut -d= -f2-)
-ORCA_GEO_TOP=$(echo "$ORCA_ENRICH"    | grep '^GEO_TOP='  | cut -d= -f2-)
-ORCA_REP_RISKS=$(echo "$ORCA_ENRICH"  | grep '^REP_RISKS=' | cut -d= -f2-)
-ORCA_CLUSTER_CNT=$(echo "$ORCA_ENRICH"| grep '^CLUSTER_COUNT=' | cut -d= -f2-)
+WATCHCLAW_CLUSTERS=$(echo "$WATCHCLAW_ENRICH"   | grep '^CLUSTERS=' | cut -d= -f2-)
+WATCHCLAW_GEO_TOP=$(echo "$WATCHCLAW_ENRICH"    | grep '^GEO_TOP='  | cut -d= -f2-)
+WATCHCLAW_REP_RISKS=$(echo "$WATCHCLAW_ENRICH"  | grep '^REP_RISKS=' | cut -d= -f2-)
+WATCHCLAW_CLUSTER_CNT=$(echo "$WATCHCLAW_ENRICH"| grep '^CLUSTER_COUNT=' | cut -d= -f2-)
 
 # Elevate to HIGH if suspicious clusters found
-if [ "${ORCA_CLUSTER_CNT:-0}" -gt 0 ] && [ "$SEVERITY" = "LOW" ]; then
+if [ "${WATCHCLAW_CLUSTER_CNT:-0}" -gt 0 ] && [ "$SEVERITY" = "LOW" ]; then
     SEVERITY="ELEVATED"
 fi
 
@@ -434,13 +434,13 @@ Simple Summary:
 - Do I need to act now? ${ACTION_NOW}
 
 Intel:
-- ASN Clusters: ${ORCA_CLUSTERS:-none}
-- Top Countries (7d): ${ORCA_GEO_TOP:-none}
-- Reputation Risks: ${ORCA_REP_RISKS:-none}"
+- ASN Clusters: ${WATCHCLAW_CLUSTERS:-none}
+- Top Countries (7d): ${WATCHCLAW_GEO_TOP:-none}
+- Reputation Risks: ${WATCHCLAW_REP_RISKS:-none}"
 
 # Use WatchClaw rate-limited Telegram function
-orca_telegram "$SEVERITY" "$TELE_MSG" 2>/dev/null || send_telegram "$TELE_MSG"
-log_posture "ALERTED: severity=${SEVERITY} clusters=${ORCA_CLUSTERS:-none} geo=${ORCA_GEO_TOP:-none}"
+watchclaw_telegram "$SEVERITY" "$TELE_MSG" 2>/dev/null || send_telegram "$TELE_MSG"
+log_posture "ALERTED: severity=${SEVERITY} clusters=${WATCHCLAW_CLUSTERS:-none} geo=${WATCHCLAW_GEO_TOP:-none}"
 
 # ── CRITICAL: auto-create GitHub issue (rate limited via WatchClaw state) ───────────
 if [ "$SEVERITY" = "CRITICAL" ]; then

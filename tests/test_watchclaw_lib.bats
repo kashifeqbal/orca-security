@@ -17,11 +17,11 @@
 load "helpers"
 
 setup() {
-    setup_orca_env
+    setup_watchclaw_env
 }
 
 teardown() {
-    teardown_orca_env
+    teardown_watchclaw_env
 }
 
 # ── watchclaw_init ─────────────────────────────────────────────────────────────────

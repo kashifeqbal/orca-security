@@ -64,7 +64,7 @@ CANARY
             echo 'root:$6$watchclaw.canary$NOT.A.REAL.HASH.THIS.IS.A.CANARY.TOKEN:19000:0:99999:7:::' > "$path"
             ;;
         *)
-            echo "ORCA_CANARY_TOKEN=$(date +%s)" > "$path"
+            echo "WATCHCLAW_CANARY_TOKEN=$(date +%s)" > "$path"
             ;;
     esac
 

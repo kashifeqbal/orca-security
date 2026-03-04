@@ -13,7 +13,7 @@ WATCHCLAW_MODULES_DIR="${WATCHCLAW_REPO_ROOT}/modules"
 
 # Creates a fresh temp WATCHCLAW_DIR for each test and sources the library.
 # Call from setup() in each .bats file.
-setup_orca_env() {
+setup_watchclaw_env() {
     TEST_TMPDIR="$(mktemp -d)"
     export WATCHCLAW_DIR="${TEST_TMPDIR}/.watchclaw"
     export WATCHCLAW_DB="${WATCHCLAW_DIR}/threat-db.json"
@@ -39,7 +39,7 @@ setup_orca_env() {
 }
 
 # Removes temp directory. Call from teardown() in each .bats file.
-teardown_orca_env() {
+teardown_watchclaw_env() {
     if [ -n "${TEST_TMPDIR:-}" ] && [ -d "${TEST_TMPDIR}" ]; then
         rm -rf "${TEST_TMPDIR}"
     fi

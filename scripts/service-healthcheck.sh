@@ -1,5 +1,5 @@
 #!/bin/bash
-# Orca Self-Healing Health Check
+# WatchClaw Self-Healing Health Check
 # Runs every 30min. Checks services, restarts failures, alerts on issues.
 
 ENV_FILE="/root/.openclaw/.env"
