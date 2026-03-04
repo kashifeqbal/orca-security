@@ -18,6 +18,7 @@ WATCHCLAW_CONF="${WATCHCLAW_CONF:-/etc/watchclaw/watchclaw.conf}"
 WATCHCLAW_TELEGRAM_TOKEN="${WATCHCLAW_TELEGRAM_TOKEN:-${ALERT_TELEGRAM_TOKEN:-}}"
 WATCHCLAW_ALERT_CHAT_ID="${WATCHCLAW_ALERT_CHAT_ID:-${ALERT_TELEGRAM_CHAT:-}}"
 
+# State file — matches canary install module output
 CANARY_STATE="/var/lib/watchclaw/canary/checksums"
 CANARY_LOG="/var/log/watchclaw/canary.log"
 TELEGRAM_BOT="${WATCHCLAW_TELEGRAM_TOKEN:-}"
@@ -27,9 +28,20 @@ mkdir -p /var/log/watchclaw
 
 [ ! -f "$CANARY_STATE" ] && exit 0
 
+# Detect first run: if state file exists but was just created (< 60s ago),
+# skip check to avoid false positives during initial baseline setup.
+if [ -f "$CANARY_STATE" ]; then
+    STATE_AGE=$(( $(date +%s) - $(stat -c %Y "$CANARY_STATE" 2>/dev/null || echo 0) ))
+    if [ "$STATE_AGE" -lt 60 ]; then
+        echo "[$(date -Iseconds)] Skipping canary check — baseline just created (${STATE_AGE}s ago)" >> "$CANARY_LOG"
+        exit 0
+    fi
+fi
+
 TRIGGERED=()
 
-while IFS='|' read -r orig_hash path planted_at; do
+# Field order: path|hash|planted_at (matches canary install module)
+while IFS='|' read -r path orig_hash planted_at; do
     [ -z "$path" ] && continue
 
     if [ ! -f "$path" ]; then

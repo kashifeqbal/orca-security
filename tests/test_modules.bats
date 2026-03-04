@@ -318,3 +318,19 @@ teardown() {
     run bash -n "${WATCHCLAW_REPO_ROOT}/scripts/service-healthcheck.sh"
     [ "$status" -eq 0 ]
 }
+
+# ── Canary field order consistency ────────────────────────────────────────────
+
+@test "canary install writes checksums as path|hash|timestamp" {
+    # Verify the install module writes path first, hash second
+    run grep -n 'echo.*CANARY_STATE.*checksums' "${WATCHCLAW_MODULES_DIR}/canary/install.sh"
+    [ "$status" -eq 0 ]
+    # The echo line should have: ${path}|${hash} (path before hash)
+    echo "$output" | grep -qE '\$\{?path\}?\|.*\$\{?hash\}?'
+}
+
+@test "canary-check reads checksums as path|hash|timestamp" {
+    # Verify the check script reads path first, hash second
+    run grep 'read.*path.*orig_hash\|read.*path.*hash' "${WATCHCLAW_SCRIPTS_DIR}/canary-check.sh"
+    [ "$status" -eq 0 ]
+}
