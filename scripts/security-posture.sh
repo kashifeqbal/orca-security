@@ -1,6 +1,7 @@
 #!/bin/bash
+# WatchClaw — https://github.com/kashifeqbal/watchclaw
 # =============================================================================
-# security-posture.sh — Argus Security Posture Reporter
+# security-posture.sh — WatchClaw Security Posture Reporter
 # =============================================================================
 # Outputs a combined system health + security posture summary.
 # Intended to be run by cron or manually. Notifies Telegram for ELEVATED+.
@@ -17,21 +18,28 @@
 
 set -euo pipefail
 
-# ── Load environment ──────────────────────────────────────────────────────────
-ENV_FILE="${WATCHCLAW_CONF:-/etc/watchclaw/watchclaw.conf}"
-[ -f "$ENV_FILE" ] && set -a && source "$ENV_FILE" && set +a
+# Load WatchClaw config
+WATCHCLAW_CONF="${WATCHCLAW_CONF:-/etc/watchclaw/watchclaw.conf}"
+# shellcheck source=/etc/watchclaw/watchclaw.conf
+[ -f "$WATCHCLAW_CONF" ] && source "$WATCHCLAW_CONF"
+
+# Telegram credentials (accept WATCHCLAW_ prefix or ALERT_ prefix from config)
+WATCHCLAW_TELEGRAM_TOKEN="${WATCHCLAW_TELEGRAM_TOKEN:-${ALERT_TELEGRAM_TOKEN:-}}"
+WATCHCLAW_ALERT_CHAT_ID="${WATCHCLAW_ALERT_CHAT_ID:-${ALERT_TELEGRAM_CHAT:-}}"
+# Bridge for watchclaw-lib.sh (uses OPS_ALERTS_BOT_TOKEN / ALERTS_TELEGRAM_CHAT)
+OPS_ALERTS_BOT_TOKEN="${WATCHCLAW_TELEGRAM_TOKEN:-}"
+ALERTS_TELEGRAM_CHAT="${WATCHCLAW_ALERT_CHAT_ID:-}"
 
 # ── Config ────────────────────────────────────────────────────────────────────
-BOT="${OPS_ALERTS_BOT_TOKEN:-}"
-CHAT_ID="${ALERTS_TELEGRAM_CHAT:-}"
+BOT="${WATCHCLAW_TELEGRAM_TOKEN:-}"
+CHAT_ID="${WATCHCLAW_ALERT_CHAT_ID:-}"
 LOG_DIR="/var/log/watchclaw"
 POSTURE_LOG="${LOG_DIR}/security-posture.log"
-HEALTH_LOG="${LOG_DIR}/service-health.log"
 
-# Source WatchClaw library (threat-db.sh is now a compat shim → watchclaw-lib.sh)
-LIB_DIR="$(dirname "$0")/lib"
-# shellcheck source=scripts/lib/threat-db.sh
-source "${LIB_DIR}/threat-db.sh"
+# Source WatchClaw library
+LIB_DIR="$(cd "$(dirname "$0")/.." && pwd)/lib"
+# shellcheck source=lib/watchclaw-lib.sh
+source "${LIB_DIR}/watchclaw-lib.sh"
 
 mkdir -p "$LOG_DIR"
 TS=$(date '+%Y-%m-%d %H:%M:%S')
@@ -63,14 +71,6 @@ check_svc_status() {
 
 check_svc_status "fail2ban"
 check_svc_status "cowrie"
-check_svc_status "cloudflared"
-check_svc_status "syncthing@syncthing"
-
-# Check Hindsight
-if ! curl -sf http://127.0.0.1:8787/health > /dev/null 2>&1; then
-    HEALTH_ISSUES+=("hindsight: unreachable")
-    HEALTH_STATUS="DEGRADED"
-fi
 
 # Check disk
 DISK_PCT=$(df / | awk 'NR==2 {print $5}' | tr -d '%')
@@ -79,20 +79,16 @@ if [ "${DISK_PCT:-0}" -gt 85 ]; then
     HEALTH_STATUS="DEGRADED"
 fi
 
-# Script warning detection (non-empty stderr OR known parser warnings)
+# Script warning detection
 SCRIPT_WARNINGS=()
-for script in "$(dirname "$0")"/*.sh "$(dirname "$0")"/lib/*.sh; do
+for script in "$(dirname "$0")"/*.sh "$(dirname "$0")/../lib"/*.sh; do
     [ -f "$script" ] || continue
     CHECK_ERR=$(bash -n "$script" 2>&1 || true)
     if [ -n "$CHECK_ERR" ]; then
         HEALTH_STATUS="DEGRADED"
         while IFS= read -r line; do
             [ -z "$line" ] && continue
-            if echo "$line" | grep -Eqi "unterminated|syntax error|unexpected token"; then
-                SCRIPT_WARNINGS+=("$(basename "$script"): $line")
-            else
-                SCRIPT_WARNINGS+=("$(basename "$script"): $line")
-            fi
+            SCRIPT_WARNINGS+=("$(basename "$script"): $line")
         done <<< "$CHECK_ERR"
     fi
 done
@@ -106,10 +102,10 @@ fi
 watchclaw_init
 
 # Rolling 30m threat score
-ROLLING_SCORE=$(threat_rolling_score 30)
+ROLLING_SCORE=$(orca_rolling_score 30)
 
 # Parse full DB for analytics
-POSTURE_DATA=$(python3 - "$ARGUS_DB" "$ARGUS_BASELINE" <<'PYEOF'
+POSTURE_DATA=$(python3 - "$WATCHCLAW_DB" "$WATCHCLAW_STATE" <<'PYEOF'
 import sys, json, datetime, statistics
 
 db_path       = sys.argv[1]
@@ -207,14 +203,13 @@ BASELINE_AVG=$(echo "$POSTURE_DATA"  | grep '^BASELINE_AVG='  | cut -d= -f2-)
 
 # Security posture recalibration (rolling score thresholds + hard-signal guard)
 ROLLING_SCORE_INT=$(printf '%.0f' "${ROLLING_SCORE:-0}")
-HARD_SIGNAL_ACTIVE=$(python3 - "$ARGUS_DB" <<'PYEOF' 2>/dev/null || echo "0"
+HARD_SIGNAL_ACTIVE=$(python3 - "$WATCHCLAW_DB" <<'PYEOF' 2>/dev/null || echo "0"
 import sys, json, datetime
 p = sys.argv[1]
 try:
     db = json.load(open(p))
 except Exception:
     print('0'); raise SystemExit
-cutoff = datetime.datetime.utcnow() - datetime.timedelta(hours=24)
 for rec in db.values():
     et = rec.get('event_types', {}) or {}
     if et.get('malware_download', 0) > 0 or et.get('persistence_attempt', 0) > 0 or et.get('tunnel_tcpip', 0) > 0:
@@ -244,7 +239,7 @@ fi
 # =============================================================================
 # 3. Verify ban effectiveness — escalate if any bans are broken
 # =============================================================================
-INEFFECTIVE_BANS=$(threat_verify_bans)
+INEFFECTIVE_BANS=$(orca_verify_bans)
 if [ -n "$INEFFECTIVE_BANS" ]; then
     HEALTH_ISSUES+=("Ineffective bans detected: $INEFFECTIVE_BANS")
     HEALTH_STATUS="DEGRADED"
@@ -252,7 +247,7 @@ if [ -n "$INEFFECTIVE_BANS" ]; then
     while IFS='|' read -r bip btype breason; do
         if [ -n "$bip" ]; then
             log_posture "WARN: Ineffective ban for $bip ($btype): $breason — re-applying"
-            /usr/sbin/ufw deny from "$bip" to any comment "argus-reapplied" 2>/dev/null || true
+            /usr/sbin/ufw deny from "$bip" to any comment "watchclaw-reapplied" 2>/dev/null || true
         fi
     done <<< "$INEFFECTIVE_BANS"
 fi
@@ -332,7 +327,7 @@ log_posture "health=${HEALTH_STATUS} severity=${SEVERITY} rolling_score=${ROLLIN
 
 if [ "$SEVERITY" = "LOW" ]; then
     # Aggregate LOW — update counter but don't notify
-    python3 - "$ARGUS_ALERTS_STATE" "$ROLLING_SCORE" <<'PYEOF'
+    python3 - "$WATCHCLAW_STATE" "$ROLLING_SCORE" <<'PYEOF'
 import sys, json, os, datetime
 state_path  = sys.argv[1]
 score       = sys.argv[2]
@@ -353,7 +348,7 @@ PYEOF
     exit 0
 fi
 
-# ── WatchClaw enrichment: ASN clusters + geo anomalies + rep risks ─────────────────
+# ── WatchClaw enrichment: ASN clusters + geo anomalies + rep risks ────────────
 WATCHCLAW_ENRICH=$(python3 - "$ORCA_ASN_DB" "$ORCA_GEO_DB" "$ORCA_REP_CACHE" "$WATCHCLAW_DB" <<'PYEOF' 2>/dev/null || echo ""
 import sys, json, datetime
 
@@ -373,7 +368,6 @@ try:
 except Exception: db = {}
 
 now_dt = datetime.datetime.utcnow()
-cutoff_7d = (now_dt - datetime.timedelta(days=7)).isoformat() + 'Z'
 
 # Suspicious clusters
 clusters = [(asn, e) for asn, e in asn_db.items() if e.get('suspicious_cluster')]
@@ -408,13 +402,13 @@ print(f"CLUSTER_COUNT={len(clusters)}")
 PYEOF
 )
 
-WATCHCLAW_CLUSTERS=$(echo "$WATCHCLAW_ENRICH"   | grep '^CLUSTERS=' | cut -d= -f2-)
-WATCHCLAW_GEO_TOP=$(echo "$WATCHCLAW_ENRICH"    | grep '^GEO_TOP='  | cut -d= -f2-)
-WATCHCLAW_REP_RISKS=$(echo "$WATCHCLAW_ENRICH"  | grep '^REP_RISKS=' | cut -d= -f2-)
-WATCHCLAW_CLUSTER_CNT=$(echo "$WATCHCLAW_ENRICH"| grep '^CLUSTER_COUNT=' | cut -d= -f2-)
+WC_CLUSTERS=$(echo "$WATCHCLAW_ENRICH"   | grep '^CLUSTERS='     | cut -d= -f2-)
+WC_GEO_TOP=$(echo "$WATCHCLAW_ENRICH"    | grep '^GEO_TOP='      | cut -d= -f2-)
+WC_REP_RISKS=$(echo "$WATCHCLAW_ENRICH"  | grep '^REP_RISKS='    | cut -d= -f2-)
+WC_CLUSTER_CNT=$(echo "$WATCHCLAW_ENRICH"| grep '^CLUSTER_COUNT=' | cut -d= -f2-)
 
-# Elevate to HIGH if suspicious clusters found
-if [ "${WATCHCLAW_CLUSTER_CNT:-0}" -gt 0 ] && [ "$SEVERITY" = "LOW" ]; then
+# Elevate to ELEVATED if suspicious clusters found
+if [ "${WC_CLUSTER_CNT:-0}" -gt 0 ] && [ "$SEVERITY" = "LOW" ]; then
     SEVERITY="ELEVATED"
 fi
 
@@ -434,19 +428,19 @@ Simple Summary:
 - Do I need to act now? ${ACTION_NOW}
 
 Intel:
-- ASN Clusters: ${WATCHCLAW_CLUSTERS:-none}
-- Top Countries (7d): ${WATCHCLAW_GEO_TOP:-none}
-- Reputation Risks: ${WATCHCLAW_REP_RISKS:-none}"
+- ASN Clusters: ${WC_CLUSTERS:-none}
+- Top Countries (7d): ${WC_GEO_TOP:-none}
+- Reputation Risks: ${WC_REP_RISKS:-none}"
 
 # Use WatchClaw rate-limited Telegram function
-watchclaw_telegram "$SEVERITY" "$TELE_MSG" 2>/dev/null || send_telegram "$TELE_MSG"
-log_posture "ALERTED: severity=${SEVERITY} clusters=${WATCHCLAW_CLUSTERS:-none} geo=${WATCHCLAW_GEO_TOP:-none}"
+orca_telegram "$SEVERITY" "$TELE_MSG" 2>/dev/null || send_telegram "$TELE_MSG"
+log_posture "ALERTED: severity=${SEVERITY} clusters=${WC_CLUSTERS:-none} geo=${WC_GEO_TOP:-none}"
 
-# ── CRITICAL: auto-create GitHub issue (rate limited via WatchClaw state) ───────────
+# ── CRITICAL: invoke critical-issue script (rate limited via WatchClaw state) ──
 if [ "$SEVERITY" = "CRITICAL" ]; then
     ISSUE_SCRIPT="$(dirname "$0")/watchclaw-critical-issue.sh"
     if [ -x "$ISSUE_SCRIPT" ]; then
         "$ISSUE_SCRIPT" 2>/dev/null || true
-        log_posture "CRITICAL: github issue attempted"
+        log_posture "CRITICAL: issue script invoked"
     fi
 fi

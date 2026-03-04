@@ -1,44 +1,57 @@
 #!/bin/bash
+# WatchClaw — https://github.com/kashifeqbal/watchclaw
 # =============================================================================
-# watchclaw-weekly-report.sh — WatchClaw Weekly Threat Summary → Obsidian
+# watchclaw-weekly-report.sh — WatchClaw Weekly Threat Summary
 # =============================================================================
-# Schedule: Sunday 02:00 server local time (Europe/Berlin)
-# Output: ~/workspace/ObsidianVault/Areas/Security/WatchClaw Weekly Threat Report YYYY-MM-DD.md
+# Schedule: Sunday 02:00 server local time
+# Output: stdout + optional file (WATCHCLAW_REPORT_DIR if set)
 #
-# Also called via: watchclaw report weekly --run-now
+# Also called via: watchclaw report
 # =============================================================================
 
 set -euo pipefail
 
-ENV_FILE="${WATCHCLAW_CONF:-/etc/watchclaw/watchclaw.conf}"
-[ -f "$ENV_FILE" ] && set -a && source "$ENV_FILE" && set +a
+# Load WatchClaw config
+WATCHCLAW_CONF="${WATCHCLAW_CONF:-/etc/watchclaw/watchclaw.conf}"
+# shellcheck source=/etc/watchclaw/watchclaw.conf
+[ -f "$WATCHCLAW_CONF" ] && source "$WATCHCLAW_CONF"
+
+# Telegram credentials (accept WATCHCLAW_ prefix or ALERT_ prefix from config)
+WATCHCLAW_TELEGRAM_TOKEN="${WATCHCLAW_TELEGRAM_TOKEN:-${ALERT_TELEGRAM_TOKEN:-}}"
+WATCHCLAW_ALERT_CHAT_ID="${WATCHCLAW_ALERT_CHAT_ID:-${ALERT_TELEGRAM_CHAT:-}}"
+# Bridge for watchclaw-lib.sh
+OPS_ALERTS_BOT_TOKEN="${WATCHCLAW_TELEGRAM_TOKEN:-}"
+ALERTS_TELEGRAM_CHAT="${WATCHCLAW_ALERT_CHAT_ID:-}"
 
 # Source WatchClaw library
-LIB_DIR="$(dirname "$0")/lib"
+LIB_DIR="$(cd "$(dirname "$0")/.." && pwd)/lib"
 # shellcheck source=lib/watchclaw-lib.sh
 source "${LIB_DIR}/watchclaw-lib.sh"
 
 watchclaw_init
 
-OBSIDIAN_DIR="/var/log/watchclaw/reports"
 LOG_DIR="/var/log/watchclaw"
-
-mkdir -p "$OBSIDIAN_DIR" "$LOG_DIR"
+mkdir -p "$LOG_DIR"
 
 REPORT_DATE=$(date '+%Y-%m-%d')
 REPORT_TS=$(date '+%Y-%m-%d %H:%M %Z')
-REPORT_FILE="${OBSIDIAN_DIR}/WatchClaw Weekly Threat Report ${REPORT_DATE}.md"
 
-echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] watchclaw-weekly-report: generating report for $REPORT_DATE" >> "${LOG_DIR}/watchclaw-weekly.log"
+# Optional report output file (set WATCHCLAW_REPORT_DIR in config)
+REPORT_FILE=""
+if [ -n "${WATCHCLAW_REPORT_DIR:-}" ]; then
+    mkdir -p "$WATCHCLAW_REPORT_DIR"
+    REPORT_FILE="${WATCHCLAW_REPORT_DIR}/WatchClaw Weekly Threat Report ${REPORT_DATE}.md"
+fi
+
+echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] watchclaw-weekly-report: generating report for $REPORT_DATE" >> "${LOG_DIR}/weekly.log"
 
 # ── Generate report data via Python ──────────────────────────────────────────
 REPORT_DATA=$(python3 - "$WATCHCLAW_DB" "$ORCA_ASN_DB" "$ORCA_GEO_DB" "$WATCHCLAW_STATE" "$ORCA_REP_CACHE" <<'PYEOF'
-import sys, json, datetime, statistics, math
+import sys, json, datetime, statistics
 
 db_path, asn_db_path, geo_db_path, state_path, rep_cache_path = sys.argv[1:]
 
 now_dt = datetime.datetime.utcnow()
-now_iso = now_dt.isoformat() + 'Z'
 cutoff_7d  = (now_dt - datetime.timedelta(days=7)).isoformat()  + 'Z'
 cutoff_30d = (now_dt - datetime.timedelta(days=30)).isoformat() + 'Z'
 
@@ -93,8 +106,7 @@ bans_this_week.sort(key=lambda x: x['at'], reverse=True)
 clusters = [(asn, e) for asn, e in asn_db.items() if e.get('suspicious_cluster')]
 clusters.sort(key=lambda x: x[1].get('cluster_score', 0), reverse=True)
 
-all_asns = [(asn, e) for asn, e in asn_db.items()]
-all_asns.sort(key=lambda x: x[1].get('rolling_7d_events', 0), reverse=True)
+all_asns = sorted(asn_db.items(), key=lambda x: x[1].get('rolling_7d_events', 0), reverse=True)
 top_asns = all_asns[:10]
 
 # ── Geo summary ──────────────────────────────────────────────────────────────
@@ -113,7 +125,7 @@ else:
 recs = []
 if clusters:
     for asn, e in clusters[:3]:
-        recs.append(f"- Review ASN {asn} for block (`watchclaw enforce ban-asn {asn} --mode ufw`)")
+        recs.append(f"- Review ASN {asn} for block (`watchclaw ban-asn {asn}`)")
 if high_rep_risk > 0:
     recs.append(f"- {high_rep_risk} IPs flagged HIGH reputation risk — consider permanent bans")
 if severity in ('HIGH', 'CRITICAL'):
@@ -121,7 +133,7 @@ if severity in ('HIGH', 'CRITICAL'):
 if not recs:
     recs.append("- No immediate actions required. Continue routine monitoring.")
 
-# ── Output as JSON for shell to format ───────────────────────────────────────
+# ── Output as JSON ──────────────────────────────────────────────────────────
 output = {
     'severity': severity,
     'total_ips': total_ips,
@@ -174,7 +186,7 @@ PYEOF
 )
 
 # ── Format report as Markdown ─────────────────────────────────────────────────
-python3 - "$REPORT_DATA" "$REPORT_DATE" "$REPORT_TS" > "$REPORT_FILE" <<'PYEOF'
+REPORT_CONTENT=$(python3 - "$REPORT_DATA" "$REPORT_DATE" "$REPORT_TS" <<'PYEOF'
 import sys, json
 
 data_str, report_date, report_ts = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -275,11 +287,20 @@ lines.append("")
 # ── Footer ───────────────────────────────────────────────────────────────────
 lines.append("---")
 lines.append("")
-lines.append("*Report generated by WatchClaw Security System. State: `~/.watchclaw/`*")
-lines.append(f"*Manual commands: `watchclaw status` | `watchclaw top --window 7d` | `watchclaw report weekly --run-now`*")
+lines.append("*Report generated by WatchClaw. State: `~/.watchclaw/`*")
+lines.append(f"*Manual commands: `watchclaw status` | `watchclaw report`*")
 
 print('\n'.join(lines))
 PYEOF
+)
 
-echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] watchclaw-weekly-report: written to $REPORT_FILE" >> "${LOG_DIR}/watchclaw-weekly.log"
-echo "{\"status\":\"ok\",\"report\":\"$REPORT_FILE\",\"date\":\"$REPORT_DATE\"}"
+# Print to stdout
+echo "$REPORT_CONTENT"
+
+# Write to file if configured
+if [ -n "$REPORT_FILE" ]; then
+    echo "$REPORT_CONTENT" > "$REPORT_FILE"
+    echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] watchclaw-weekly-report: written to $REPORT_FILE" >> "${LOG_DIR}/weekly.log"
+fi
+
+echo "{\"status\":\"ok\",\"date\":\"$REPORT_DATE\"}"

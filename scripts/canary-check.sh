@@ -1,4 +1,5 @@
 #!/bin/bash
+# WatchClaw — https://github.com/kashifeqbal/watchclaw
 # =============================================================================
 # canary-check.sh — Tripwire canary token checker
 # =============================================================================
@@ -8,13 +9,19 @@
 
 set -euo pipefail
 
-ENV_FILE="${WATCHCLAW_CONF:-/etc/watchclaw/watchclaw.conf}"
-[ -f "$ENV_FILE" ] && set -a && source "$ENV_FILE" && set +a
+# Load WatchClaw config
+WATCHCLAW_CONF="${WATCHCLAW_CONF:-/etc/watchclaw/watchclaw.conf}"
+# shellcheck source=/etc/watchclaw/watchclaw.conf
+[ -f "$WATCHCLAW_CONF" ] && source "$WATCHCLAW_CONF"
+
+# Telegram credentials (accept WATCHCLAW_ prefix or ALERT_ prefix from config)
+WATCHCLAW_TELEGRAM_TOKEN="${WATCHCLAW_TELEGRAM_TOKEN:-${ALERT_TELEGRAM_TOKEN:-}}"
+WATCHCLAW_ALERT_CHAT_ID="${WATCHCLAW_ALERT_CHAT_ID:-${ALERT_TELEGRAM_CHAT:-}}"
 
 CANARY_STATE="/var/lib/watchclaw/canary/checksums"
 CANARY_LOG="/var/log/watchclaw/canary.log"
-TELEGRAM_BOT="${OPS_ALERTS_BOT_TOKEN:-}"
-TELEGRAM_CHAT="${ALERTS_TELEGRAM_CHAT:-}"
+TELEGRAM_BOT="${WATCHCLAW_TELEGRAM_TOKEN:-}"
+TELEGRAM_CHAT="${WATCHCLAW_ALERT_CHAT_ID:-}"
 
 mkdir -p /var/log/watchclaw
 

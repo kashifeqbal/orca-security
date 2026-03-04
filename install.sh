@@ -111,14 +111,35 @@ preflight() {
 # ── Directory setup ───────────────────────────────────────────────────────────
 setup_dirs() {
     log "Creating directories..."
-    $DRY_RUN && return 0
+    if $DRY_RUN; then
+        echo "  [dry-run] Would create: $WATCHCLAW_INSTALL_DIR $WATCHCLAW_STATE_DIR $WATCHCLAW_LOG_DIR /etc/watchclaw"
+        echo "  [dry-run] Would create: $WATCHCLAW_STATE_DIR/{export,sync,canary}"
+        echo "  [dry-run] Would create: ~/.watchclaw/ (state JSON files)"
+        return 0
+    fi
 
     mkdir -p "$WATCHCLAW_INSTALL_DIR" "$WATCHCLAW_STATE_DIR" "$WATCHCLAW_LOG_DIR" /etc/watchclaw
     mkdir -p "$WATCHCLAW_STATE_DIR"/{export,sync,canary}
 
-    # Copy files if running from cloned repo
-    if [ -f "$(dirname "$0")/lib/watchclaw-lib.sh" ]; then
-        cp -r "$(dirname "$0")"/{lib,modules,scripts,config} "$WATCHCLAW_INSTALL_DIR/"
+    # Create per-user WatchClaw state directory with empty JSON stubs
+    local wc_state_dir="${HOME:-/root}/.watchclaw"
+    mkdir -p "$wc_state_dir"
+    [ -f "${wc_state_dir}/threat-db.json" ]       || echo '{}' > "${wc_state_dir}/threat-db.json"
+    [ -f "${wc_state_dir}/reputation-cache.json" ] || echo '{}' > "${wc_state_dir}/reputation-cache.json"
+    [ -f "${wc_state_dir}/asn-db.json" ]           || echo '{}' > "${wc_state_dir}/asn-db.json"
+    [ -f "${wc_state_dir}/geo-db.json" ]           || echo '{"countries":{},"history":[]}' > "${wc_state_dir}/geo-db.json"
+    [ -f "${wc_state_dir}/watchclaw-state.json" ]  || echo '{"alert_rates":{},"last_issue_at":"","info_count":0,"event_counts":[],"last_baseline_updated":""}' > "${wc_state_dir}/watchclaw-state.json"
+
+    # Copy files from cloned repo
+    local src_dir
+    src_dir="$(dirname "$0")"
+    if [ -f "${src_dir}/lib/watchclaw-lib.sh" ]; then
+        cp -r "${src_dir}/lib"     "$WATCHCLAW_INSTALL_DIR/"
+        cp -r "${src_dir}/modules" "$WATCHCLAW_INSTALL_DIR/"
+        cp -r "${src_dir}/scripts" "$WATCHCLAW_INSTALL_DIR/"
+        cp -r "${src_dir}/config"  "$WATCHCLAW_INSTALL_DIR/"
+        chmod +x "${WATCHCLAW_INSTALL_DIR}"/scripts/*.sh
+        log "Copied operational scripts to ${WATCHCLAW_INSTALL_DIR}/scripts/"
     fi
 }
 
@@ -162,92 +183,119 @@ run_module() {
 # ── Install CLI ───────────────────────────────────────────────────────────────
 install_cli() {
     log "Installing WatchClaw CLI..."
-    $DRY_RUN && return 0
+    if $DRY_RUN; then
+        echo "  [dry-run] Would install CLI to: $WATCHCLAW_BIN"
+        return 0
+    fi
 
-    cat > "$WATCHCLAW_BIN" << 'CLIEOF'
+    # Copy the CLI script from the repo (it's the canonical source)
+    local src_cli
+    src_cli="$(dirname "$0")/watchclaw"
+    if [ -f "$src_cli" ]; then
+        install -m 0755 "$src_cli" "$WATCHCLAW_BIN"
+    else
+        # Fallback: write inline CLI
+        cat > "$WATCHCLAW_BIN" << 'CLIEOF'
 #!/bin/bash
-# WatchClaw CLI — wrapper for watchclaw commands
-set -euo pipefail
-
-WATCHCLAW_DIR="/opt/watchclaw"
-WATCHCLAW_STATE="/var/lib/watchclaw"
-WATCHCLAW_CONF="/etc/watchclaw/watchclaw.conf"
-
+# WatchClaw CLI
+WATCHCLAW_INSTALL_DIR="${WATCHCLAW_INSTALL_DIR:-/opt/watchclaw}"
+WATCHCLAW_CONF="${WATCHCLAW_CONF:-/etc/watchclaw/watchclaw.conf}"
 [ -f "$WATCHCLAW_CONF" ] && source "$WATCHCLAW_CONF"
-source "${WATCHCLAW_DIR}/lib/watchclaw-lib.sh" 2>/dev/null || true
+SCRIPTS_DIR="${WATCHCLAW_INSTALL_DIR}/scripts"
+LIB_DIR="${WATCHCLAW_INSTALL_DIR}/lib"
+[ -f "${LIB_DIR}/watchclaw-lib.sh" ] && source "${LIB_DIR}/watchclaw-lib.sh" 2>/dev/null || true
 
-case "${1:-help}" in
-    status)     bash "${WATCHCLAW_DIR}/scripts/security-posture.sh" ;;
-    report)     bash "${WATCHCLAW_DIR}/scripts/security-posture.sh" --full ;;
-    threats)    bash "${WATCHCLAW_DIR}/scripts/watchclaw-threats.sh" ;;
-    ban)        shift; bash "${WATCHCLAW_DIR}/scripts/watchclaw-ban.sh" "$@" ;;
-    unban)      shift; bash "${WATCHCLAW_DIR}/scripts/watchclaw-unban.sh" "$@" ;;
-    export)     shift; bash "${WATCHCLAW_DIR}/scripts/watchclaw-export.sh" "$@" ;;
-    import)     shift; bash "${WATCHCLAW_DIR}/scripts/watchclaw-import.sh" "$@" ;;
-    sync)       shift; bash "${WATCHCLAW_DIR}/scripts/watchclaw-sync.sh" "$@" ;;
-    selftest)   bash "${WATCHCLAW_DIR}/scripts/watchclaw-selftest.sh" ;;
-    module)
-        shift
-        case "${1:-list}" in
-            list)    ls "${WATCHCLAW_DIR}/modules/" 2>/dev/null || echo "No modules" ;;
-            enable)  shift; bash "${WATCHCLAW_DIR}/modules/$1/install.sh" ;;
-            disable) shift; bash "${WATCHCLAW_DIR}/modules/$1/uninstall.sh" 2>/dev/null || echo "No uninstall for $1" ;;
-        esac
-        ;;
-    version)    echo "WatchClaw v$(cat ${WATCHCLAW_DIR}/VERSION 2>/dev/null || echo unknown)" ;;
+cmd="${1:-help}"; shift 2>/dev/null || true
+case "$cmd" in
+    status)   bash "${SCRIPTS_DIR}/security-posture.sh" ;;
+    report)   bash "${SCRIPTS_DIR}/watchclaw-weekly-report.sh" ;;
+    score)    watchclaw_init; orca_get_score "${1:?Usage: watchclaw score <ip>}" ;;
+    ban)      ip="${1:?Usage: watchclaw ban <ip>}"; watchclaw_init; watchclaw_record_event "$ip" "manual_ban" "via_cli" > /dev/null; watchclaw_check_and_ban "$ip"; /usr/sbin/ufw deny from "$ip" to any comment "watchclaw-manual" 2>/dev/null || true; echo "Banned $ip" ;;
+    unban)    /usr/sbin/ufw delete deny from "${1:?Usage: watchclaw unban <ip>}" to any 2>/dev/null || true; echo "Unbanned $1" ;;
+    health)   bash "${SCRIPTS_DIR}/service-healthcheck.sh" ;;
+    selftest) bash "${SCRIPTS_DIR}/watchclaw-preflight.sh" ;;
+    version)  echo "WatchClaw v$(cat "${WATCHCLAW_INSTALL_DIR}/VERSION" 2>/dev/null || echo unknown)" ;;
     help|--help|-h)
         echo "WatchClaw — Open Runtime Containment & Analysis"
-        echo ""
-        echo "Commands:"
-        echo "  status          Security posture summary"
-        echo "  report          Full security report"
-        echo "  threats         List active threats with scores"
-        echo "  ban <ip>        Manually ban an IP"
-        echo "  unban <ip>      Remove a ban"
-        echo "  export          Export threat blocklist"
-        echo "  import          Import threat feeds"
-        echo "  sync push|pull  Cross-node threat sync"
-        echo "  module list     List modules"
-        echo "  module enable   Enable a module"
-        echo "  module disable  Disable a module"
-        echo "  selftest        Run all checks"
-        echo "  version         Show version"
+        echo "Commands: status report score ban unban health selftest version help"
         ;;
-    *) echo "Unknown command: $1. Run 'watchclaw help' for usage." ;;
+    *) echo "Unknown command: $cmd. Run 'watchclaw help' for usage." >&2; exit 1 ;;
 esac
 CLIEOF
-    chmod +x "$WATCHCLAW_BIN"
+        chmod +x "$WATCHCLAW_BIN"
+    fi
     echo "$WATCHCLAW_VERSION" > "${WATCHCLAW_INSTALL_DIR}/VERSION"
 }
 
 # ── Install crons ─────────────────────────────────────────────────────────────
 install_crons() {
     log "Installing cron schedules..."
-    $DRY_RUN && return 0
+
+    # Determine which modules are active
+    local cowrie_enabled=false
+    [ -f /etc/systemd/system/cowrie.service ] && cowrie_enabled=true
+    [ -d /home/cowrie/cowrie ] && cowrie_enabled=true
+
+    if $DRY_RUN; then
+        echo "  [dry-run] Would write /etc/cron.d/watchclaw with:"
+        echo "    canary-check.sh        every 5 min"
+        echo "    security-posture.sh    every 30 min"
+        echo "    service-healthcheck.sh every 10 min"
+        echo "    watchclaw-weekly-report.sh  Sunday 02:00"
+        if $cowrie_enabled; then
+            echo "    cowrie-autoban.sh      every 5 min  (cowrie module active)"
+            echo "    cowrie-notify.sh       every 5 min  (cowrie module active)"
+        fi
+        return 0
+    fi
 
     local cron_file="/etc/cron.d/watchclaw"
     cat > "$cron_file" << EOF
 # WatchClaw Security — automated monitoring
+# https://github.com/kashifeqbal/watchclaw
 SHELL=/bin/bash
-PATH=/usr/local/bin:/usr/bin:/bin
+PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin
 WATCHCLAW_CONF=/etc/watchclaw/watchclaw.conf
 
-${CRON_NOTIFY_INTERVAL:-*/15 * * * *}     root ${WATCHCLAW_INSTALL_DIR}/scripts/cowrie-notify.sh >> ${WATCHCLAW_LOG_DIR}/notify.log 2>&1
-${CRON_AUTOBAN_INTERVAL:-*/15 * * * *}    root ${WATCHCLAW_INSTALL_DIR}/scripts/cowrie-autoban.sh >> ${WATCHCLAW_LOG_DIR}/autoban.log 2>&1
-${CRON_POSTURE_INTERVAL:-*/30 * * * *}    root ${WATCHCLAW_INSTALL_DIR}/scripts/security-posture.sh >> ${WATCHCLAW_LOG_DIR}/posture.log 2>&1
-${CRON_HEALTHCHECK_INTERVAL:-*/30 * * * *} root ${WATCHCLAW_INSTALL_DIR}/scripts/service-healthcheck.sh >> ${WATCHCLAW_LOG_DIR}/health.log 2>&1
-${CRON_WEEKLY_REPORT:-0 9 * * 1}          root ${WATCHCLAW_INSTALL_DIR}/scripts/watchclaw-weekly-report.sh >> ${WATCHCLAW_LOG_DIR}/weekly.log 2>&1
+# Canary token integrity check — every 5 min
+*/5 * * * *  root ${WATCHCLAW_INSTALL_DIR}/scripts/canary-check.sh >> ${WATCHCLAW_LOG_DIR}/canary.log 2>&1
+
+# Security posture report — every 30 min
+*/30 * * * * root ${WATCHCLAW_INSTALL_DIR}/scripts/security-posture.sh >> ${WATCHCLAW_LOG_DIR}/posture.log 2>&1
+
+# Service health check — every 10 min
+*/10 * * * * root ${WATCHCLAW_INSTALL_DIR}/scripts/service-healthcheck.sh >> ${WATCHCLAW_LOG_DIR}/health.log 2>&1
+
+# Weekly summary report — Sunday 02:00
+0 2 * * 0    root ${WATCHCLAW_INSTALL_DIR}/scripts/watchclaw-weekly-report.sh >> ${WATCHCLAW_LOG_DIR}/weekly.log 2>&1
 EOF
 
-    if [ "${THREAT_FEEDS:-}" ]; then
-        echo "${CRON_FEED_IMPORT:-0 */6 * * *}      root ${WATCHCLAW_INSTALL_DIR}/scripts/watchclaw-import.sh >> ${WATCHCLAW_LOG_DIR}/import.log 2>&1" >> "$cron_file"
+    if $cowrie_enabled; then
+        cat >> "$cron_file" << EOF
+
+# Cowrie auto-ban — every 5 min (cowrie module active)
+*/5 * * * *  root ${WATCHCLAW_INSTALL_DIR}/scripts/cowrie-autoban.sh >> ${WATCHCLAW_LOG_DIR}/autoban.log 2>&1
+
+# Cowrie event notifier — every 5 min (cowrie module active)
+*/5 * * * *  root ${WATCHCLAW_INSTALL_DIR}/scripts/cowrie-notify.sh >> ${WATCHCLAW_LOG_DIR}/notify.log 2>&1
+EOF
+        log "Cowrie cron entries added (cowrie module detected)"
+    fi
+
+    if [ -n "${THREAT_FEEDS:-}" ]; then
+        echo "" >> "$cron_file"
+        echo "# Threat feed import" >> "$cron_file"
+        echo "${CRON_FEED_IMPORT:-0 */6 * * *}  root ${WATCHCLAW_INSTALL_DIR}/scripts/watchclaw-import.sh >> ${WATCHCLAW_LOG_DIR}/import.log 2>&1" >> "$cron_file"
     fi
 
     if [ "${SYNC_ENABLE:-false}" = "true" ]; then
-        echo "${CRON_SYNC:-*/15 * * * *}             root ${WATCHCLAW_INSTALL_DIR}/scripts/watchclaw-sync.sh >> ${WATCHCLAW_LOG_DIR}/sync.log 2>&1" >> "$cron_file"
+        echo "" >> "$cron_file"
+        echo "# Cross-node threat sync" >> "$cron_file"
+        echo "${CRON_SYNC:-*/15 * * * *}  root ${WATCHCLAW_INSTALL_DIR}/scripts/watchclaw-sync.sh >> ${WATCHCLAW_LOG_DIR}/sync.log 2>&1" >> "$cron_file"
     fi
 
     chmod 644 "$cron_file"
+    log "Cron schedule written to $cron_file"
 }
 
 # ── Main ──────────────────────────────────────────────────────────────────────

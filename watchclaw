@@ -1,0 +1,163 @@
+#!/bin/bash
+# WatchClaw — https://github.com/kashifeqbal/watchclaw
+# WatchClaw CLI — unified command interface
+
+WATCHCLAW_INSTALL_DIR="${WATCHCLAW_INSTALL_DIR:-/opt/watchclaw}"
+WATCHCLAW_CONF="${WATCHCLAW_CONF:-/etc/watchclaw/watchclaw.conf}"
+
+# shellcheck source=/etc/watchclaw/watchclaw.conf
+[ -f "$WATCHCLAW_CONF" ] && source "$WATCHCLAW_CONF"
+
+# Locate scripts and lib relative to this CLI binary
+SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -d "${SELF_DIR}/scripts" ]; then
+    # Running from repo checkout
+    SCRIPTS_DIR="${SELF_DIR}/scripts"
+    LIB_DIR="${SELF_DIR}/lib"
+else
+    # Installed
+    SCRIPTS_DIR="${WATCHCLAW_INSTALL_DIR}/scripts"
+    LIB_DIR="${WATCHCLAW_INSTALL_DIR}/lib"
+fi
+
+# Load lib if available (gives us orca_get_score etc.)
+# shellcheck source=lib/watchclaw-lib.sh
+[ -f "${LIB_DIR}/watchclaw-lib.sh" ] && source "${LIB_DIR}/watchclaw-lib.sh" 2>/dev/null || true
+
+_require_lib() {
+    if ! type watchclaw_init > /dev/null 2>&1; then
+        echo "Error: watchclaw-lib.sh not loaded. Install WatchClaw first." >&2
+        exit 1
+    fi
+}
+
+_require_scripts() {
+    if [ ! -d "$SCRIPTS_DIR" ]; then
+        echo "Error: scripts directory not found at $SCRIPTS_DIR" >&2
+        exit 1
+    fi
+}
+
+VERSION_FILE="${WATCHCLAW_INSTALL_DIR}/VERSION"
+[ ! -f "$VERSION_FILE" ] && VERSION_FILE="${SELF_DIR}/VERSION"
+
+cmd="${1:-help}"
+shift 2>/dev/null || true
+
+case "$cmd" in
+    status)
+        _require_scripts
+        bash "${SCRIPTS_DIR}/security-posture.sh"
+        ;;
+
+    report)
+        _require_scripts
+        bash "${SCRIPTS_DIR}/watchclaw-weekly-report.sh"
+        ;;
+
+    score)
+        ip="${1:-}"
+        if [ -z "$ip" ]; then
+            echo "Usage: watchclaw score <ip>" >&2
+            exit 1
+        fi
+        _require_lib
+        watchclaw_init
+        score=$(orca_get_score "$ip")
+        echo "Score for $ip: $score"
+        ;;
+
+    ban)
+        ip="${1:-}"
+        if [ -z "$ip" ]; then
+            echo "Usage: watchclaw ban <ip>" >&2
+            exit 1
+        fi
+        _require_lib
+        watchclaw_init
+        # Record a high-impact event to push above ban threshold, then apply ban
+        watchclaw_record_event "$ip" "manual_ban" "via_cli" > /dev/null 2>&1 || true
+        result=$(watchclaw_check_and_ban "$ip" 2>/dev/null || echo "applied")
+        # Also enforce directly via UFW
+        /usr/sbin/ufw deny from "$ip" to any comment "watchclaw-manual" 2>/dev/null || \
+            echo "Note: UFW rule not applied (may need root or UFW not installed)"
+        echo "Banned $ip (ban type: $result)"
+        ;;
+
+    unban)
+        ip="${1:-}"
+        if [ -z "$ip" ]; then
+            echo "Usage: watchclaw unban <ip>" >&2
+            exit 1
+        fi
+        # Remove UFW rule
+        /usr/sbin/ufw delete deny from "$ip" to any 2>/dev/null || \
+            echo "Note: UFW rule not removed (may need root or rule not present)"
+        # Mark ban inactive in DB
+        _require_lib
+        watchclaw_init
+        python3 - "$ip" "$WATCHCLAW_DB" <<'PYEOF' 2>/dev/null || true
+import sys, json, os
+ip, db_path = sys.argv[1], sys.argv[2]
+try:
+    with open(db_path) as f: db = json.load(f)
+except Exception:
+    db = {}
+if ip in db:
+    for ban in db[ip].get('bans', []):
+        ban['active'] = False
+    tmp = db_path + '.tmp'
+    with open(tmp, 'w') as f: json.dump(db, f, indent=2)
+    os.replace(tmp, db_path)
+    print(f"Removed ban record for {ip}")
+else:
+    print(f"No record found for {ip}")
+PYEOF
+        echo "Unbanned $ip"
+        ;;
+
+    health)
+        _require_scripts
+        bash "${SCRIPTS_DIR}/service-healthcheck.sh"
+        ;;
+
+    selftest)
+        _require_scripts
+        bash "${SCRIPTS_DIR}/watchclaw-preflight.sh"
+        ;;
+
+    version)
+        if [ -f "$VERSION_FILE" ]; then
+            echo "WatchClaw v$(cat "$VERSION_FILE")"
+        else
+            echo "WatchClaw (version unknown)"
+        fi
+        ;;
+
+    help|--help|-h)
+        cat << 'EOF'
+WatchClaw — Open Runtime Containment & Analysis
+https://github.com/kashifeqbal/watchclaw
+
+Commands:
+  status            Security posture summary (rolling threat score, severity)
+  report            Weekly threat summary (markdown report)
+  score <ip>        Show threat score for an IP address
+  ban <ip>          Manually ban an IP (UFW + threat DB)
+  unban <ip>        Remove a ban (UFW + threat DB)
+  health            Self-healing health check (services, disk, cowrie)
+  selftest          Run preflight syntax + runtime validation
+  version           Show WatchClaw version
+  help              Show this help
+
+Config:   /etc/watchclaw/watchclaw.conf
+Logs:     /var/log/watchclaw/
+State:    ~/.watchclaw/
+EOF
+        ;;
+
+    *)
+        echo "Unknown command: $cmd. Run 'watchclaw help' for usage." >&2
+        exit 1
+        ;;
+esac
