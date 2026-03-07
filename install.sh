@@ -300,8 +300,8 @@ EOF
 main() {
     banner
     preflight
-    load_config
     setup_dirs
+    load_config
 
     # Determine modules to install
     local ALL_MODULES="ssh-harden ufw-baseline fail2ban cowrie kernel canary threat-feed"
